@@ -543,7 +543,7 @@ if ballTab then
 
         -- Load the external script
         local success, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Imadev5/dkje3hru3hurh3irhuyejde2hdedkeijduedkeiduiedopeduiej/main/main.lua"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Imadev5/dkje3hru3hurh3irhuyejde2hdedkeijduedkeiduiedopeduiej/refs/heads/main/main.lua"))()
         end)
 
         if success then
