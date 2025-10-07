@@ -317,6 +317,57 @@ local function setupStamina()
 	end)
 end
 
+-- SPEED BOOST
+local speedEnabled = false
+local speedConn
+local originalSpeed = 16
+
+local function toggleSpeed(state)
+	speedEnabled = state
+	
+	local char = LocalPlayer.Character
+	local hum = char and char:FindFirstChildOfClass("Humanoid")
+	
+	if speedEnabled then
+		if hum then
+			originalSpeed = hum.WalkSpeed
+			hum.WalkSpeed = originalSpeed * 2
+		end
+		
+		if not speedConn then
+			speedConn = RunService.Heartbeat:Connect(function()
+				local c = LocalPlayer.Character
+				local h = c and c:FindFirstChildOfClass("Humanoid")
+				if h and speedEnabled then
+					if h.WalkSpeed ~= originalSpeed * 2 then
+						h.WalkSpeed = originalSpeed * 2
+					end
+				end
+			end)
+		end
+	else
+		if hum then
+			hum.WalkSpeed = originalSpeed
+		end
+		if speedConn then
+			speedConn:Disconnect()
+			speedConn = nil
+		end
+	end
+end
+
+LocalPlayer.CharacterAdded:Connect(function(char)
+	char:WaitForChild("Humanoid")
+	if speedEnabled then
+		task.wait(0.5)
+		local h = char:FindFirstChildOfClass("Humanoid")
+		if h then
+			originalSpeed = h.WalkSpeed
+			h.WalkSpeed = originalSpeed * 2
+		end
+	end
+end)
+
 -- REACH BYPASS
 do
 	for _, v in ipairs(getgc(true)) do
@@ -355,7 +406,6 @@ local function createReachBox()
 	reachBox.Size = Vector3.new(reachDist * 2, reachDist * 2, reachDist * 2)
 	reachBox.Color = Color3.fromRGB(70, 75, 210)
 	reachBox.Material = Enum.Material.ForceField
-	reachBox.Shape = Enum.PartType.Ball
 	reachBox.Parent = workspace
 end
 
@@ -428,29 +478,11 @@ local function clearPrediction()
 	predictionParts = {}
 end
 
-local function createPredictionMarker(pos)
-	local marker = Instance.new("Part")
-	marker.Size = Vector3.new(0.5, 0.5, 0.5)
-	marker.Position = pos
-	marker.Anchored = true
-	marker.CanCollide = false
-	marker.Transparency = 0.3
-	marker.Color = Color3.fromRGB(255, 200, 50)
-	marker.Material = Enum.Material.Neon
-	marker.Parent = workspace
-	
-	local corner = Instance.new("CornerWedgePart")
-	corner.Parent = marker
-	
-	table.insert(predictionParts, marker)
-	return marker
-end
-
 local function predictBall(ball)
 	if not ball or not ball.Parent then return end
 	
 	local vel = ball.AssemblyLinearVelocity
-	if vel.Magnitude < 2 then
+	if vel.Magnitude < 3 then
 		clearPrediction()
 		return
 	end
@@ -458,20 +490,19 @@ local function predictBall(ball)
 	clearPrediction()
 	
 	local pos = ball.Position
-	local dt = 0.1
+	local dt = 0.08
 	local gravity = Vector3.new(0, -workspace.Gravity, 0)
 	
-	-- Create trail
-	for i = 1, 15 do
+	for i = 1, 18 do
 		vel = vel + gravity * dt
 		pos = pos + vel * dt
 		
 		local marker = Instance.new("Part")
-		marker.Size = Vector3.new(0.4, 0.4, 0.4)
+		marker.Size = Vector3.new(0.35, 0.35, 0.35)
 		marker.Position = pos
 		marker.Anchored = true
 		marker.CanCollide = false
-		marker.Transparency = 0.4 + (i * 0.03)
+		marker.Transparency = 0.3 + (i * 0.035)
 		marker.Color = Color3.fromRGB(70, 75, 210)
 		marker.Material = Enum.Material.Neon
 		marker.Shape = Enum.PartType.Ball
@@ -479,39 +510,36 @@ local function predictBall(ball)
 		
 		table.insert(predictionParts, marker)
 		
-		-- Ground projection line
-		if i == 1 or i % 3 == 0 then
-			local rayDir = Vector3.new(0, -500, 0)
+		if i % 4 == 0 then
 			local rayParams = RaycastParams.new()
 			rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 			rayParams.FilterDescendantsInstances = {LocalPlayer.Character, ball}
 			
-			local result = workspace:Raycast(pos, rayDir, rayParams)
+			local result = workspace:Raycast(pos, Vector3.new(0, -500, 0), rayParams)
 			if result then
 				local beam = Instance.new("Part")
-				beam.Size = Vector3.new(0.1, (pos - result.Position).Magnitude, 0.1)
+				beam.Size = Vector3.new(0.08, (pos - result.Position).Magnitude, 0.08)
 				beam.CFrame = CFrame.new(pos:Lerp(result.Position, 0.5), result.Position)
 				beam.Anchored = true
 				beam.CanCollide = false
-				beam.Transparency = 0.7
+				beam.Transparency = 0.65
 				beam.Color = Color3.fromRGB(70, 75, 210)
 				beam.Material = Enum.Material.Neon
 				beam.Parent = workspace
-				
 				table.insert(predictionParts, beam)
 				
-				-- Ground marker
-				local ground = Instance.new("Part")
-				ground.Size = Vector3.new(1.5, 0.1, 1.5)
-				ground.Position = result.Position + Vector3.new(0, 0.05, 0)
-				ground.Anchored = true
-				ground.CanCollide = false
-				ground.Transparency = 0.5
-				ground.Color = Color3.fromRGB(255, 200, 50)
-				ground.Material = Enum.Material.Neon
-				ground.Parent = workspace
-				
-				table.insert(predictionParts, ground)
+				if i == 4 or i == 12 then
+					local ground = Instance.new("Part")
+					ground.Size = Vector3.new(1.2, 0.08, 1.2)
+					ground.Position = result.Position + Vector3.new(0, 0.04, 0)
+					ground.Anchored = true
+					ground.CanCollide = false
+					ground.Transparency = 0.4
+					ground.Color = Color3.fromRGB(255, 200, 50)
+					ground.Material = Enum.Material.Neon
+					ground.Parent = workspace
+					table.insert(predictionParts, ground)
+				end
 			end
 		end
 	end
@@ -523,8 +551,8 @@ local function togglePrediction(state)
 	if predictionEnabled then
 		if not predictionConn then
 			predictionConn = RunService.Heartbeat:Connect(function()
-				for _, ball in ipairs(ballCache) do
-					if ball and ball.Parent then
+				for _, ball in ipairs(workspace:GetDescendants()) do
+					if ball:IsA("Part") and ball:FindFirstChild("network") then
 						predictBall(ball)
 						break
 					end
@@ -659,18 +687,8 @@ if playerTab then
 	
 	ui.CreateToggle(playerTab, "Reach", "Extend touch range", false, toggleReach)
 	
-	makeSlider(playerTab, "X Axis", 1, MAX_REACH, reachX, function(v)
-		reachX = v
-		updateReachBox()
-	end)
-	
-	makeSlider(playerTab, "Y Axis", 1, MAX_REACH, reachY, function(v)
-		reachY = v
-		updateReachBox()
-	end)
-	
-	makeSlider(playerTab, "Z Axis", 1, MAX_REACH, reachZ, function(v)
-		reachZ = v
+	makeSlider(playerTab, "Distance", 1, MAX_REACH, reachDist, function(v)
+		reachDist = v
 		updateReachBox()
 	end)
 	
