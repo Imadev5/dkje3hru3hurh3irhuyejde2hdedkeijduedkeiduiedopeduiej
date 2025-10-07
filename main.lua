@@ -186,7 +186,7 @@ local function createMain()
 		f.BorderSizePixel = 0
 		f.ScrollBarThickness = 6
 		f.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
-		f.CanvasSize = UDim2.new(0, 0, 0, 600)
+		f.CanvasSize = UDim2.new(0, 0, 0, 400)
 
 		local layout = Instance.new("UIListLayout", f)
 		layout.Padding = UDim.new(0, 12)
@@ -392,9 +392,7 @@ ui.Close.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- =========================
--- Infinite Stamina Logic (original/unchanged)
--- =========================
+-- INFINITE STAMINA (original logic)
 local staminaConn
 local staminaOn = false
 
@@ -440,11 +438,7 @@ end
 
 hookStamina()
 
--- =========================
--- Reach Logic (updated for 1000 max and hitbox-only reach)
--- =========================
-
--- Reach bypass (overlapCheck + gkCheck hook)
+-- REACH BYPASS HOOK (your logic)
 do
 	for _, v in ipairs(getgc(true)) do
 		if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
@@ -454,13 +448,14 @@ do
 	end
 end
 
+-- REACH & UI/Cooldown (lag-free)
 local reachOn = false
 local reachX, reachY, reachZ = 5, 5, 5
-local MAX_REACH = 1000  -- Updated to 1000
+local MAX_REACH = 30
 local reachTransparency = 0.5
 local lastTouchTime = {}
-local TOUCH_COOLDOWN = 1
-local SCAN_DISTANCE = 200  -- Increased since max reach is now 1000
+local TOUCH_COOLDOWN = 1 -- seconds
+local SCAN_DISTANCE = 50
 local CHECK_RATE = 0.05
 local reachHitbox
 local reachConn
@@ -527,11 +522,9 @@ local function enableReach(state)
 						continue
 					end
 
-					-- ONLY fire reach if ball is INSIDE the visible hitbox
-					local toBall = ball.Position - root.Position
-					if math.abs(toBall.X) <= reachX/2 and math.abs(toBall.Y) <= reachY/2 and math.abs(toBall.Z) <= reachZ/2 then
+					local diff = (ball.Position - root.Position)
+					if math.abs(diff.X) <= reachX/2 and math.abs(diff.Y) <= reachY/2 and math.abs(diff.Z) <= reachZ/2 then
 						lastTouchTime[ballId] = now
-						-- Only fire touches for key limbs
 						local limbs = {
 							char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
 							char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"), 
@@ -564,13 +557,11 @@ local function enableReach(state)
 	end
 end
 
--- Slider UI creation helper
 local function makeSlider(parent, label, min, max, start, callback)
 	local frame = Instance.new("Frame", parent)
 	frame.Size = UDim2.new(1, -16, 0, 44)
 	frame.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
 	frame.BorderSizePixel = 0
-	frame.LayoutOrder = parent:FindFirstChildOfClass("UIListLayout") and #parent:GetChildren() or 1
 	local frameCorner = Instance.new("UICorner", frame)
 	frameCorner.CornerRadius = UDim.new(0, 8)
 
@@ -583,27 +574,24 @@ local function makeSlider(parent, label, min, max, start, callback)
 	lbl.Font = Enum.Font.GothamSemibold
 	lbl.TextSize = 15
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.TextTransparency = 1
 
 	local valueLbl = Instance.new("TextLabel", frame)
-	valueLbl.Size = UDim2.new(0, 60, 1, 0)  -- Made wider for 4-digit numbers
-	valueLbl.Position = UDim2.new(1, -90, 0, 0)
+	valueLbl.Size = UDim2.new(0, 44, 1, 0)
+	valueLbl.Position = UDim2.new(1, -74, 0, 0)
 	valueLbl.BackgroundTransparency = 1
 	valueLbl.Text = tostring(start)
 	valueLbl.TextColor3 = Color3.fromRGB(180, 180, 190)
 	valueLbl.Font = Enum.Font.Gotham
 	valueLbl.TextSize = 13
 	valueLbl.TextXAlignment = Enum.TextXAlignment.Right
-	valueLbl.TextTransparency = 1
 
 	local slider = Instance.new("TextButton", frame)
 	slider.Size = UDim2.new(0.25, 0, 0.2, 0)
-	slider.Position = UDim2.new(0.65, 0, 0.4, 0)  -- Adjusted for wider value label
+	slider.Position = UDim2.new(0.7, 0, 0.4, 0)
 	slider.BackgroundColor3 = Color3.fromRGB(55, 60, 65)
 	slider.BorderSizePixel = 0
 	slider.AutoButtonColor = false
 	slider.Text = ""
-	slider.BackgroundTransparency = 1
 	local sliderCorner = Instance.new("UICorner", slider)
 	sliderCorner.CornerRadius = UDim.new(1, 0)
 
@@ -637,33 +625,28 @@ if playerTab then
 	local reachToggle = ui.CreateToggle(
 		playerTab,
 		"Reach",
-		"Enable reach mechanics; only works inside visible hitbox.",
+		"Enable reach mechanics; customize hitbox XYZ & transparency.",
 		false,
 		enableReach
 	)
-	reachToggle.LayoutOrder = 2
 
 	local reachXSlider = makeSlider(playerTab, "Reach X", 1, MAX_REACH, reachX, function(val)
 		reachX = val
 		updateReachVisual()
 	end)
-	reachXSlider.LayoutOrder = 3
 
 	local reachYSlider = makeSlider(playerTab, "Reach Y", 1, MAX_REACH, reachY, function(val)
 		reachY = val
 		updateReachVisual()
 	end)
-	reachYSlider.LayoutOrder = 4
 
 	local reachZSlider = makeSlider(playerTab, "Reach Z", 1, MAX_REACH, reachZ, function(val)
 		reachZ = val
 		updateReachVisual()
 	end)
-	reachZSlider.LayoutOrder = 5
 
-	local transparencySlider = makeSlider(playerTab, "Transparency", 0, 100, reachTransparency*100, function(val)
-		reachTransparency = math.clamp(val/100, 0, 1)
+	local transparencySlider = makeSlider(playerTab, "Transparency", 0, 1, reachTransparency, function(val)
+		reachTransparency = math.clamp(val, 0, 1)
 		updateReachVisual()
 	end)
-	transparencySlider.LayoutOrder = 6
 end
