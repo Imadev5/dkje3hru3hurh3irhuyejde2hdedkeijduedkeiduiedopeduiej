@@ -3,17 +3,13 @@ local TweenService = game:GetService("TweenService")
 local CoreGui = game:GetService("CoreGui")
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Clean up old instances
-if CoreGui:FindFirstChild("solaris") then
-    CoreGui:FindFirstChild("solaris"):Destroy()
-end
-
+-- Create the main ScreenGui parent
 local screengui = Instance.new("ScreenGui")
 screengui.Name = "solaris"
-screengui.ResetOnSpawn = false
 screengui.Parent = CoreGui
 screengui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
@@ -26,12 +22,13 @@ local function tween(instance, props, time, style, dir)
     return info
 end
 
+-- Main function to construct the UI
 local function createMain()
     local frame = Instance.new("Frame")
     frame.Parent = screengui
     frame.Name = "solaris_hub"
-    frame.Size = UDim2.new(0, 560, 0, 360)
-    frame.Position = UDim2.new(0.5, -280, 0.5, -180)
+    frame.Size = UDim2.new(0, 560, 0, 480) -- Increased height for new elements
+    frame.Position = UDim2.new(0.5, -280, 0.5, -240) -- Centered
     frame.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
     frame.BorderSizePixel = 0
     frame.Active = true
@@ -76,9 +73,9 @@ local function createMain()
     title.Size = UDim2.new(1, -90, 1, 0)
     title.Position = UDim2.new(0, 16, 0, 0)
     title.BackgroundTransparency = 1
-    title.Text = "Solaris Hub"
+    title.Text = "⚡ Solaris Hub"
     title.TextColor3 = Color3.fromRGB(240, 240, 245)
-    title.Font = Enum.Font.SourceSansBold
+    title.Font = Enum.Font.GothamBold
     title.TextSize = 19
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.TextTransparency = 1
@@ -87,9 +84,9 @@ local function createMain()
     closeButton.Size = UDim2.new(0, 32, 0, 28)
     closeButton.Position = UDim2.new(1, -42, 0, 7)
     closeButton.BackgroundColor3 = Color3.fromRGB(220, 60, 60)
-    closeButton.Text = "X"
+    closeButton.Text = "✕"
     closeButton.TextColor3 = Color3.fromRGB(255,255,255)
-    closeButton.Font = Enum.Font.SourceSansBold
+    closeButton.Font = Enum.Font.GothamBold
     closeButton.TextSize = 16
     closeButton.AutoButtonColor = false
     closeButton.Name = "CloseButton"
@@ -132,14 +129,14 @@ local function createMain()
 
     local function makeSidebarButton(text, icon, order)
         local btn = Instance.new("TextButton", sidebar)
-        btn.Name = text.."Btn"
+        btn.Name = text
         btn.Size = UDim2.new(1, -20, 0, 44)
         btn.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
         btn.BorderSizePixel = 0
         btn.AutoButtonColor = false
-        btn.Text = text
+        btn.Text = icon .. " " .. text
         btn.TextColor3 = Color3.fromRGB(200, 200, 210)
-        btn.Font = Enum.Font.SourceSansSemibold
+        btn.Font = Enum.Font.GothamSemibold
         btn.TextSize = 15
         btn.LayoutOrder = order
         btn.TextTransparency = 1
@@ -147,7 +144,6 @@ local function createMain()
         local c = Instance.new("UICorner", btn)
         c.CornerRadius = UDim.new(0, 8)
 
-        -- Hover glow effect
         local glow = Instance.new("Frame", btn)
         glow.Name = "Glow"
         glow.Size = UDim2.new(0, 4, 1, 0)
@@ -171,9 +167,10 @@ local function createMain()
     end
 
     local tabs = {"Ball", "Player", "GK", "Settings"}
+    local icons = {"⚽", "👤", "🧤", "⚙️"}
     local buttons = {}
     for i, t in ipairs(tabs) do
-        buttons[t] = makeSidebarButton(t, "", i)
+        buttons[t] = makeSidebarButton(t, icons[i], i)
     end
 
     -- Content area
@@ -197,7 +194,7 @@ local function createMain()
         f.BorderSizePixel = 0
         f.ScrollBarThickness = 6
         f.ScrollBarImageColor3 = Color3.fromRGB(88, 101, 242)
-        f.CanvasSize = UDim2.new(0, 0, 0, 400)
+        f.CanvasSize = UDim2.new(0, 0, 2, 0) -- Increased canvas size
 
         local layout = Instance.new("UIListLayout", f)
         layout.Padding = UDim.new(0, 12)
@@ -214,7 +211,7 @@ local function createMain()
         lbl.Size = UDim2.new(1, -16, 0, 35)
         lbl.BackgroundTransparency = 1
         lbl.TextColor3 = Color3.fromRGB(240, 240, 245)
-        lbl.Font = Enum.Font.SourceSansBold
+        lbl.Font = Enum.Font.GothamBold
         lbl.TextSize = 18
         lbl.TextXAlignment = Enum.TextXAlignment.Left
         lbl.TextTransparency = 1
@@ -247,7 +244,7 @@ local function createMain()
         lbl.BackgroundTransparency = 1
         lbl.Text = labelText
         lbl.TextColor3 = Color3.fromRGB(240, 240, 245)
-        lbl.Font = Enum.Font.SourceSansSemibold
+        lbl.Font = Enum.Font.GothamSemibold
         lbl.TextSize = 16
         lbl.TextTransparency = 1
         lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -258,12 +255,11 @@ local function createMain()
         desc.BackgroundTransparency = 1
         desc.Text = descText
         desc.TextColor3 = Color3.fromRGB(150, 150, 160)
-        desc.Font = Enum.Font.SourceSans
+        desc.Font = Enum.Font.Gotham
         desc.TextSize = 13
         desc.TextTransparency = 1
         desc.TextXAlignment = Enum.TextXAlignment.Left
 
-        -- Toggle switch background
         local toggleBg = Instance.new("Frame", container)
         toggleBg.Size = UDim2.new(0, 54, 0, 28)
         toggleBg.Position = UDim2.new(1, -68, 0.5, -14)
@@ -273,7 +269,6 @@ local function createMain()
         local toggleBgCorner = Instance.new("UICorner", toggleBg)
         toggleBgCorner.CornerRadius = UDim.new(1, 0)
 
-        -- Toggle circle
         local toggleCircle = Instance.new("Frame", toggleBg)
         toggleCircle.Size = UDim2.new(0, 22, 0, 22)
         toggleCircle.Position = initialState and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
@@ -294,7 +289,6 @@ local function createMain()
         toggle.MouseButton1Click:Connect(function()
             state = not state
             
-            -- Animate toggle
             if state then
                 tween(toggleBg, {BackgroundColor3 = Color3.fromRGB(67, 181, 129)}, 0.25, Enum.EasingStyle.Quad)
                 tween(toggleCircle, {Position = UDim2.new(1, -25, 0.5, -11)}, 0.25, Enum.EasingStyle.Back)
@@ -311,102 +305,189 @@ local function createMain()
         return container
     end
 
+    ---[[ NEW FUNCTION: Creates a slider element ]]--
+    local function createSlider(parent, labelText, descText, min, max, initial, callback)
+        local container = Instance.new("Frame", parent)
+        container.Size = UDim2.new(1, -16, 0, 80)
+        container.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
+        container.BorderSizePixel = 0
+        container.LayoutOrder = parent:FindFirstChildOfClass("UIListLayout") and #parent:GetChildren() or 1
+        local containerCorner = Instance.new("UICorner", container)
+        containerCorner.CornerRadius = UDim.new(0, 10)
+
+        local lbl = Instance.new("TextLabel", container)
+        lbl.Size = UDim2.new(0.6, 0, 0, 22)
+        lbl.Position = UDim2.new(0, 14, 0, 12)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = labelText
+        lbl.TextColor3 = Color3.fromRGB(240, 240, 245)
+        lbl.Font = Enum.Font.GothamSemibold
+        lbl.TextSize = 16
+        lbl.TextTransparency = 1
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+
+        local desc = Instance.new("TextLabel", container)
+        desc.Size = UDim2.new(1, -150, 0, 18)
+        desc.Position = UDim2.new(0, 14, 0, 54)
+        desc.BackgroundTransparency = 1
+        desc.Text = descText
+        desc.TextColor3 = Color3.fromRGB(150, 150, 160)
+        desc.Font = Enum.Font.Gotham
+        desc.TextSize = 13
+        desc.TextTransparency = 1
+        desc.TextXAlignment = Enum.TextXAlignment.Left
+
+        local valueLabel = Instance.new("TextLabel", container)
+        valueLabel.Size = UDim2.new(0, 100, 0, 22)
+        valueLabel.Position = UDim2.new(1, -114, 0, 12)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.Text = tostring(initial)
+        valueLabel.TextColor3 = Color3.fromRGB(240, 240, 245)
+        valueLabel.Font = Enum.Font.GothamSemibold
+        valueLabel.TextSize = 16
+        valueLabel.TextTransparency = 1
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+
+        local track = Instance.new("Frame", container)
+        track.Size = UDim2.new(1, -28, 0, 6)
+        track.Position = UDim2.new(0, 14, 0, 40)
+        track.BackgroundColor3 = Color3.fromRGB(20, 20, 24)
+        track.BorderSizePixel = 0
+        local trackCorner = Instance.new("UICorner", track)
+        trackCorner.CornerRadius = UDim.new(1, 0)
+        
+        local fill = Instance.new("Frame", track)
+        fill.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
+        fill.BorderSizePixel = 0
+        local fillCorner = Instance.new("UICorner", fill)
+        fillCorner.CornerRadius = UDim.new(1, 0)
+
+        local thumb = Instance.new("Frame", track)
+        thumb.Size = UDim2.new(0, 18, 0, 18)
+        thumb.Position = UDim2.new(0, -9, 0.5, -9)
+        thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        thumb.BorderSizePixel = 0
+        local thumbCorner = Instance.new("UICorner", thumb)
+        thumbCorner.CornerRadius = UDim.new(1, 0)
+
+        local dragger = Instance.new("TextButton", track)
+        dragger.Size = UDim2.new(1, 18, 1, 18)
+        dragger.Position = UDim2.new(0, -9, 0, -9)
+        dragger.BackgroundTransparency = 1
+        dragger.Text = ""
+
+        local function updateSlider(value)
+            local percentage = (value - min) / (max - min)
+            percentage = math.clamp(percentage, 0, 1)
+            fill.Size = UDim2.new(percentage, 0, 1, 0)
+            thumb.Position = UDim2.new(percentage, -9, 0.5, -9)
+            valueLabel.Text = string.format("%.1f", value)
+            if callback then
+                callback(value)
+            end
+        end
+
+        local dragging = false
+        dragger.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+            end
+        end)
+        dragger.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+        
+        UserInputService.InputChanged:Connect(function(input)
+            if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                local mouseX = input.Position.X
+                local trackStart = track.AbsolutePosition.X
+                local trackWidth = track.AbsoluteSize.X
+                local percentage = (mouseX - trackStart) / trackWidth
+                percentage = math.clamp(percentage, 0, 1)
+                local value = min + (max - min) * percentage
+                updateSlider(value)
+            end
+        end)
+        
+        updateSlider(initial)
+        return container
+    end
+
     return {
         Root = frame,
         Close = closeButton,
         Buttons = buttons,
         TabFrames = tabFrames,
-        Title = title,
-        Sidebar = sidebar,
-        Content = content,
-        AccentLine = accentLine,
-        CreateToggle = createToggle
+        CreateToggle = createToggle,
+        CreateSlider = createSlider -- Return the new function
     }
 end
 
 local ui = createMain()
 
 local function fadeDescendants(root, targetTransparency, time)
-    local objects = {}
-    if root:IsA("Frame") or root:IsA("ImageLabel") or root:IsA("ImageButton") then
-        table.insert(objects, root)
-    end
     for _, v in pairs(root:GetDescendants()) do
-        if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
-            table.insert(objects, v)
-        elseif v:IsA("Frame") or v:IsA("ImageLabel") or v:IsA("ImageButton") then
-            table.insert(objects, v)
+        if v:IsA("GuiObject") then
+            local prop = nil
+            if v:IsA("TextLabel") or v:IsA("TextButton") or v:IsA("TextBox") then
+                prop = "TextTransparency"
+            elseif v:IsA("ImageLabel") or v:IsA("ImageButton") then
+                prop = "ImageTransparency"
+            elseif v:IsA("Frame") or v:IsA("ScrollingFrame") then
+                prop = "BackgroundTransparency"
+            end
+            if prop then
+                tween(v, {[prop] = targetTransparency}, time)
+            end
         end
     end
-    for _, obj in ipairs(objects) do
-        if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
-            tween(obj, {TextTransparency = targetTransparency}, time)
-        elseif obj:IsA("ImageLabel") or obj:IsA("ImageButton") then
-            tween(obj, {ImageTransparency = targetTransparency}, time)
-        elseif obj:IsA("Frame") then
-            tween(obj, {BackgroundTransparency = targetTransparency}, time)
-        end
+    if root:IsA("Frame") then
+        tween(root, {BackgroundTransparency = targetTransparency}, time)
     end
 end
 
 -- Fade in with smooth animation
 fadeDescendants(ui.Root, 1, 0)
-tween(ui.Root, {Size = UDim2.new(0, 520, 0, 320)}, 0)
+tween(ui.Root, {Size = UDim2.new(0, 520, 0, 440)}, 0)
 task.delay(0.05, function()
     fadeDescendants(ui.Root, 0, 0.4)
-    tween(ui.Root, {Size = UDim2.new(0, 560, 0, 360)}, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+    tween(ui.Root, {Size = UDim2.new(0, 560, 0, 480)}, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 end)
 
 -- Tab switching
+local currentTabName = "Ball"
 local function switchTo(tabName)
-    if not ui.TabFrames[tabName] then return end
-    local current
-    for name, frame in pairs(ui.TabFrames) do
-        if frame.Visible then current = name break end
-    end
-    if current == tabName then return end
-    local outFrame = ui.TabFrames[current]
+    if not ui.TabFrames[tabName] or currentTabName == tabName then return end
+
+    local outFrame = ui.TabFrames[currentTabName]
     local inFrame = ui.TabFrames[tabName]
-    if outFrame then
-        for _, v in pairs(outFrame:GetDescendants()) do
-            if v:IsA("TextLabel") or v:IsA("TextButton") then
-                tween(v, {TextTransparency = 1}, 0.2)
-            elseif v:IsA("Frame") then
-                tween(v, {BackgroundTransparency = 1}, 0.2)
-            end
-        end
-        task.delay(0.2, function()
-            outFrame.Visible = false
-            inFrame.Visible = true
-            fadeDescendants(inFrame, 1, 0)
-            task.delay(0.02, function()
-                fadeDescendants(inFrame, 0, 0.25)
-            end)
-        end)
-    else
+
+    fadeDescendants(outFrame, 1, 0.2)
+    task.delay(0.2, function()
+        outFrame.Visible = false
         inFrame.Visible = true
-        fadeDescendants(inFrame, 1, 0)
+        fadeDescendants(inFrame, 1, 0) -- Set to transparent instantly
         task.delay(0.02, function()
-            fadeDescendants(inFrame, 0, 0.25)
+            fadeDescendants(inFrame, 0, 0.25) -- Fade in
         end)
-    end
+    end)
+    currentTabName = tabName
 end
 
 -- Hook up sidebar buttons
 for name, btn in pairs(ui.Buttons) do
     btn.MouseButton1Click:Connect(function()
-        tween(btn, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}, 0.15)
-        task.delay(0.2, function()
-            tween(btn, {BackgroundColor3 = Color3.fromRGB(28, 28, 32)}, 0.2)
-        end)
-        switchTo(name)
+        -- Use btn.Name which was set correctly in the creation function
+        switchTo(btn.Name)
     end)
 end
 
 -- Close with animation
 ui.Close.MouseButton1Click:Connect(function()
     fadeDescendants(ui.Root, 1, 0.3)
-    tween(ui.Root, {Size = UDim2.new(0, 520, 0, 320)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+    tween(ui.Root, {Size = UDim2.new(0, 520, 0, 440)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
     task.delay(0.32, function()
         if screengui and screengui.Parent then
             screengui:Destroy()
@@ -414,8 +495,19 @@ ui.Close.MouseButton1Click:Connect(function()
     end)
 end)
 
+-- ===============================================
+-- SCRIPT LOGIC AND FEATURES
+-- ===============================================
+
+-- Find the Player Tab for adding new features
+local playerTab = ui.TabFrames["Player"]
+if not playerTab then
+    warn("Player tab not found! Cannot add features.")
+    return
+end
+
 -- =========================
--- Infinite Stamina Logic
+-- Infinite Stamina Logic (RESTORED TO ORIGINAL)
 -- =========================
 local staminaConn
 local staminaOn = false
@@ -425,6 +517,7 @@ local function hookStamina()
         staminaConn:Disconnect()
         staminaConn = nil
     end
+    -- Use pcall to prevent errors if the path doesn't exist
     local ok, stamina = pcall(function()
         return LocalPlayer:WaitForChild("PlayerScripts")
             :WaitForChild("controllers"):WaitForChild("movementController")
@@ -439,128 +532,144 @@ local function hookStamina()
     end
 end
 
--- Create toggle in Player tab
-local playerTab = ui.TabFrames["Player"]
-if playerTab then
-    ui.CreateToggle(
-        playerTab, 
-        "Infinite Stamina", 
-        "Never run out of stamina while playing", 
-        false, 
-        function(state)
-            staminaOn = state
-            if staminaOn then
-                hookStamina()
-            else
-                if staminaConn then
-                    staminaConn:Disconnect()
-                    staminaConn = nil
+-- Create toggle in Player tab using the original logic
+ui.CreateToggle(
+    playerTab, 
+    "Infinite Stamina", 
+    "Never run out of stamina while playing", 
+    false, 
+    function(state)
+        staminaOn = state
+        if staminaOn then
+            hookStamina() -- Re-hook when toggled on
+        else
+            if staminaConn then
+                staminaConn:Disconnect()
+                staminaConn = nil
+            end
+        end
+    end
+)
+
+-- Initial call to hook stamina when the script runs
+hookStamina()
+
+
+-- =========================
+-- Reach Feature Logic
+-- =========================
+local reachOn = false
+local reachDist = 5.0
+local reachVisual = nil
+local reachConn = nil
+local currentBall = nil
+
+-- Bypass Reach (Kept as is per request)
+pcall(function()
+    if getgc and hookfunction then
+        for _, v in ipairs(getgc(true)) do
+            if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") and isfunction(v.overlapCheck) and isfunction(v.gkCheck) then
+                hookfunction(v.overlapCheck, function() return true end)
+                hookfunction(v.gkCheck, function() return true end)
+            end
+        end
+    end
+end)
+
+-- Helper function to fire touch events
+local function fireTouch(ball, limb)
+    if firetouchinterest then
+        pcall(firetouchinterest, ball, limb, 0)
+        task.wait(0.03)
+        pcall(firetouchinterest, ball, limb, 1)
+    end
+end
+
+-- Main reach loop (optimized)
+local function startReachLoop()
+    if reachConn then return end -- Already running
+    reachConn = RunService.Heartbeat:Connect(function()
+        if not reachOn then return end
+
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        -- Optimized ball finding: only search if the ball is missing
+        if not currentBall or not currentBall.Parent then
+            currentBall = nil -- Reset if parent is nil
+            for _, v in ipairs(workspace:GetChildren()) do
+                if v:IsA("Part") and v:FindFirstChild("network") then
+                    currentBall = v
+                    break
                 end
             end
         end
-    )
-end
 
--- Initialize stamina hook
-hookStamina()
+        if not currentBall then return end -- No ball in workspace, do nothing
 
--- =========================
--- Ball Tab - External Script Loader
--- =========================
-local ballTab = ui.TabFrames["Ball"]
-if ballTab then
-    -- Create button to load external script
-    local loadScriptContainer = Instance.new("Frame", ballTab)
-    loadScriptContainer.Size = UDim2.new(1, -16, 0, 85)
-    loadScriptContainer.BackgroundColor3 = Color3.fromRGB(38, 38, 44)
-    loadScriptContainer.BorderSizePixel = 0
-    loadScriptContainer.LayoutOrder = 1
-    local loadScriptCorner = Instance.new("UICorner", loadScriptContainer)
-    loadScriptCorner.CornerRadius = UDim.new(0, 10)
-
-    local loadScriptTitle = Instance.new("TextLabel", loadScriptContainer)
-    loadScriptTitle.Size = UDim2.new(1, -20, 0, 22)
-    loadScriptTitle.Position = UDim2.new(0, 14, 0, 12)
-    loadScriptTitle.BackgroundTransparency = 1
-    loadScriptTitle.Text = "Ball Script Loader"
-    loadScriptTitle.TextColor3 = Color3.fromRGB(240, 240, 245)
-    loadScriptTitle.Font = Enum.Font.SourceSansSemibold
-    loadScriptTitle.TextSize = 16
-    loadScriptTitle.TextXAlignment = Enum.TextXAlignment.Left
-
-    local loadScriptDesc = Instance.new("TextLabel", loadScriptContainer)
-    loadScriptDesc.Size = UDim2.new(1, -20, 0, 18)
-    loadScriptDesc.Position = UDim2.new(0, 14, 0, 36)
-    loadScriptDesc.BackgroundTransparency = 1
-    loadScriptDesc.Text = "Load external ball modification script"
-    loadScriptDesc.TextColor3 = Color3.fromRGB(150, 150, 160)
-    loadScriptDesc.Font = Enum.Font.SourceSans
-    loadScriptDesc.TextSize = 13
-    loadScriptDesc.TextXAlignment = Enum.TextXAlignment.Left
-
-    local loadButton = Instance.new("TextButton", loadScriptContainer)
-    loadButton.Size = UDim2.new(0, 100, 0, 32)
-    loadButton.Position = UDim2.new(0, 14, 1, -42)
-    loadButton.BackgroundColor3 = Color3.fromRGB(88, 101, 242)
-    loadButton.Text = "Load Script"
-    loadButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    loadButton.Font = Enum.Font.SourceSansBold
-    loadButton.TextSize = 14
-    loadButton.BorderSizePixel = 0
-    loadButton.AutoButtonColor = false
-    local loadButtonCorner = Instance.new("UICorner", loadButton)
-    loadButtonCorner.CornerRadius = UDim.new(0, 8)
-
-    -- Status indicator
-    local statusLabel = Instance.new("TextLabel", loadScriptContainer)
-    statusLabel.Size = UDim2.new(1, -130, 0, 32)
-    statusLabel.Position = UDim2.new(0, 120, 1, -42)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "Ready to load"
-    statusLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-    statusLabel.Font = Enum.Font.SourceSans
-    statusLabel.TextSize = 13
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-
-    -- Button hover effect
-    loadButton.MouseEnter:Connect(function()
-        tween(loadButton, {BackgroundColor3 = Color3.fromRGB(98, 111, 252)}, 0.2)
-    end)
-    loadButton.MouseLeave:Connect(function()
-        tween(loadButton, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}, 0.2)
-    end)
-
-    -- Load script when clicked
-    loadButton.MouseButton1Click:Connect(function()
-        -- Button press effect
-        tween(loadButton, {BackgroundColor3 = Color3.fromRGB(78, 91, 232)}, 0.1)
-        task.delay(0.15, function()
-            tween(loadButton, {BackgroundColor3 = Color3.fromRGB(88, 101, 242)}, 0.15)
-        end)
-
-        statusLabel.Text = "Loading script..."
-        statusLabel.TextColor3 = Color3.fromRGB(88, 101, 242)
-
-        -- Load the external script
-        local success, err = pcall(function()
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/Imadev5/dkje3hru3hurh3irhuyejde2hdedkeijduedkeiduiedopeduiej/refs/heads/main/main.lua"))()
-        end)
-
-        if success then
-            statusLabel.Text = "Script loaded successfully!"
-            statusLabel.TextColor3 = Color3.fromRGB(67, 181, 129)
-            task.delay(3, function()
-                statusLabel.Text = "Ready to load"
-                statusLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-            end)
-        else
-            statusLabel.Text = "Failed to load script"
-            statusLabel.TextColor3 = Color3.fromRGB(220, 60, 60)
-            warn("Script loading error:", err)
-            task.delay(3, function()
-                statusLabel.Text = "Ready to load"
-                statusLabel.TextColor3 = Color3.fromRGB(150, 150, 160)
-            end)
+        if (currentBall.Position - root.Position).Magnitude <= reachDist then
+            for _, limb in ipairs(char:GetChildren()) do
+                if limb:IsA("BasePart") then
+                    -- Use task.spawn to avoid yielding the entire loop
+                    task.spawn(fireTouch, currentBall, limb)
+                end
+            end
         end
     end)
 end
+
+-- Function to create or get the reach visualizer
+local function manageReachVisual()
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    if not reachVisual or not reachVisual.Parent then
+        reachVisual = Instance.new("Part")
+        reachVisual.Name = "ReachVisualizer"
+        reachVisual.Shape = Enum.PartType.Ball
+        reachVisual.Material = Enum.Material.ForceField
+        reachVisual.Color = Color3.fromRGB(88, 101, 242)
+        reachVisual.Anchored = false
+        reachVisual.CanCollide = false
+        reachVisual.CanTouch = false
+        
+        local weld = Instance.new("WeldConstraint")
+        weld.Part0 = char:WaitForChild("HumanoidRootPart")
+        weld.Part1 = reachVisual
+        weld.Parent = reachVisual
+        
+        reachVisual.Parent = char
+    end
+    
+    reachVisual.Size = Vector3.new(reachDist * 2, reachDist * 2, reachDist * 2)
+end
+
+-- Create UI Controls for Reach in the Player Tab
+ui.CreateToggle(playerTab, "Enable Reach", "Automatically touch the ball from a distance", false, function(state)
+    reachOn = state
+    if reachOn then
+        manageReachVisual()
+        startReachLoop()
+        if reachVisual then 
+            local transparencySliderValue = 0.5 -- A default or stored value
+            -- This is a bit tricky since the slider might not exist yet. We'll handle initial transparency here.
+            reachVisual.Transparency = 1 - transparencySliderValue
+        end 
+    else
+        if reachVisual then reachVisual.Transparency = 1 end
+    end
+end)
+
+ui.CreateSlider(playerTab, "Reach Distance", "How far the reach extends (in studs)", 1, 30, 5, function(value)
+    reachDist = value
+    if reachOn and reachVisual then
+        reachVisual.Size = Vector3.new(reachDist * 2, reachDist * 2, reachDist * 2)
+    end
+end)
+
+ui.CreateSlider(playerTab, "Visualizer Transparency", "Controls the visibility of the reach sphere", 0, 1, 0.5, function(value)
+    if reachVisual then -- Apply transparency regardless of reach being on, so it can be preset
+        reachVisual.Transparency = 1 - value -- Invert so slider at 1 is fully visible
+    end
+end)
