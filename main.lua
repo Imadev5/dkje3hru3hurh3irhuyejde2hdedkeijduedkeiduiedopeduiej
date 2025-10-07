@@ -7,13 +7,12 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 
---// Main UI creation
+-- Main UI creation
 local screengui = Instance.new("ScreenGui")
 screengui.Name = "solaris"
 screengui.Parent = CoreGui
 screengui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 
--- Tween helper
 local function tween(instance, props, time, style, dir)
 	style = style or Enum.EasingStyle.Quad
 	dir = dir or Enum.EasingDirection.Out
@@ -158,7 +157,6 @@ local function createMain()
 			tween(btn, {BackgroundColor3 = Color3.fromRGB(28, 28, 32)}, 0.2)
 			tween(glow, {BackgroundTransparency = 1}, 0.2)
 		end)
-
 		return btn
 	end
 
@@ -169,7 +167,6 @@ local function createMain()
 		buttons[t] = makeSidebarButton(t, icons[i], i)
 	end
 
-	-- Content area
 	local content = Instance.new("Frame", frame)
 	content.Name = "Content"
 	content.Size = UDim2.new(1, -150, 1, -42)
@@ -177,7 +174,6 @@ local function createMain()
 	content.BackgroundColor3 = Color3.fromRGB(32, 32, 38)
 	content.BorderSizePixel = 0
 	content.BackgroundTransparency = 1
-
 	local contentCorner = Instance.new("UICorner", content)
 	contentCorner.CornerRadius = UDim.new(0, 10)
 
@@ -224,7 +220,6 @@ local function createMain()
 	local currentTab = "Ball"
 	tabFrames[currentTab].Visible = true
 
-	-- Enhanced toggle creation
 	local function createToggle(parent, labelText, descText, initialState, callback)
 		local container = Instance.new("Frame", parent)
 		container.Size = UDim2.new(1, -16, 0, 68)
@@ -256,7 +251,6 @@ local function createMain()
 		desc.TextTransparency = 1
 		desc.TextXAlignment = Enum.TextXAlignment.Left
 
-		-- Toggle background
 		local toggleBg = Instance.new("Frame", container)
 		toggleBg.Size = UDim2.new(0, 54, 0, 28)
 		toggleBg.Position = UDim2.new(1, -68, 0.5, -14)
@@ -266,7 +260,6 @@ local function createMain()
 		local toggleBgCorner = Instance.new("UICorner", toggleBg)
 		toggleBgCorner.CornerRadius = UDim.new(1, 0)
 
-		-- Toggle circle
 		local toggleCircle = Instance.new("Frame", toggleBg)
 		toggleCircle.Size = UDim2.new(0, 22, 0, 22)
 		toggleCircle.Position = initialState and UDim2.new(1, -25, 0.5, -11) or UDim2.new(0, 3, 0.5, -11)
@@ -297,7 +290,6 @@ local function createMain()
 				callback(state)
 			end
 		end)
-
 		return container
 	end
 
@@ -400,9 +392,7 @@ ui.Close.MouseButton1Click:Connect(function()
 	end)
 end)
 
--- =========================
--- Infinite Stamina Logic (unchanged from original)
--- =========================
+-- INFINITE STAMINA (original logic)
 local staminaConn
 local staminaOn = false
 
@@ -448,11 +438,7 @@ end
 
 hookStamina()
 
--- =========================
--- Reach Logic and UI (fixed and integrated)
--- =========================
-
--- Reach bypass (overlapCheck + gkCheck hook)
+-- REACH BYPASS HOOK (your logic)
 do
 	for _, v in ipairs(getgc(true)) do
 		if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
@@ -462,12 +448,19 @@ do
 	end
 end
 
+-- REACH & UI/Cooldown (lag-free)
 local reachOn = false
 local reachX, reachY, reachZ = 5, 5, 5
 local MAX_REACH = 30
 local reachTransparency = 0.5
-
+local lastTouchTime = {}
+local TOUCH_COOLDOWN = 1 -- seconds
+local SCAN_DISTANCE = 50
+local CHECK_RATE = 0.05
 local reachHitbox
+local reachConn
+local lastCheck = 0
+
 local function updateReachVisual()
 	if reachHitbox then
 		reachHitbox.Size = Vector3.new(reachX, reachY, reachZ)
@@ -488,33 +481,65 @@ local function createReachVisual()
 	reachHitbox.Parent = workspace
 end
 
-local reachConn
 local function enableReach(state)
 	reachOn = state
 	if reachOn then
 		createReachVisual()
 		if not reachConn then
 			reachConn = RunService.Heartbeat:Connect(function()
+				local now = tick()
+				
+				-- Always update visual position smoothly
 				local char = LocalPlayer.Character
 				local root = char and char:FindFirstChild("HumanoidRootPart")
 				if root and reachHitbox then
 					reachHitbox.Position = root.Position
 					updateReachVisual()
-					for _, ball in ipairs(workspace:GetDescendants()) do
-						if ball:IsA("Part") and ball:FindFirstChild("network") then
-							local diff = (ball.Position - root.Position)
-							if math.abs(diff.X) <= reachX/2 and math.abs(diff.Y) <= reachY/2 and math.abs(diff.Z) <= reachZ/2 then
-								for _, limb in pairs(char:GetDescendants()) do
-									if limb:IsA("BasePart") then
-										task.spawn(function()
-											firetouchinterest(ball, limb, 0)
-											task.wait(0.03)
-											firetouchinterest(ball, limb, 1)
-										end)
-									end
-								end
+				end
+				
+				-- Only run expensive logic every CHECK_RATE seconds
+				if now - lastCheck < CHECK_RATE then return end
+				lastCheck = now
+				
+				if not (char and root) then return end
+				
+				-- Pre-filter: only check balls that are reasonably close
+				local nearbyBalls = {}
+				for _, ball in ipairs(workspace:GetDescendants()) do
+					if ball:IsA("Part") and ball:FindFirstChild("network") then
+						local distance = (ball.Position - root.Position).Magnitude
+						if distance <= SCAN_DISTANCE then
+							table.insert(nearbyBalls, ball)
+						end
+					end
+				end
+				
+				if #nearbyBalls == 0 then return end
+				
+				for _, ball in ipairs(nearbyBalls) do
+					local ballId = ball:GetDebugId()
+					if lastTouchTime[ballId] and (now - lastTouchTime[ballId] < TOUCH_COOLDOWN) then
+						continue
+					end
+
+					local diff = (ball.Position - root.Position)
+					if math.abs(diff.X) <= reachX/2 and math.abs(diff.Y) <= reachY/2 and math.abs(diff.Z) <= reachZ/2 then
+						lastTouchTime[ballId] = now
+						local limbs = {
+							char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
+							char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"), 
+							char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
+							char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg"),
+							char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+						}
+						for _, limb in ipairs(limbs) do
+							if limb then
+								firetouchinterest(ball, limb, 0)
+								task.wait(0.01)
+								firetouchinterest(ball, limb, 1)
 							end
 						end
+						break
 					end
 				end
 			end)
@@ -528,10 +553,10 @@ local function enableReach(state)
 			reachConn:Disconnect()
 			reachConn = nil
 		end
+		lastTouchTime = {}
 	end
 end
 
--- Slider UI creation helper
 local function makeSlider(parent, label, min, max, start, callback)
 	local frame = Instance.new("Frame", parent)
 	frame.Size = UDim2.new(1, -16, 0, 44)
@@ -573,7 +598,7 @@ local function makeSlider(parent, label, min, max, start, callback)
 	local drag = false
 	local function update(x)
 		local percent = math.clamp((x - slider.AbsolutePosition.X)/slider.AbsoluteSize.X, 0, 1)
-		local val = math.floor(percent*(max-min)+min + 0.5) -- round properly
+		local val = math.floor(percent*(max-min)+min + 0.5)
 		valueLbl.Text = tostring(val)
 		callback(val)
 	end
@@ -604,31 +629,24 @@ if playerTab then
 		false,
 		enableReach
 	)
-	-- Position adjustment for neat stacking
-	reachToggle.LayoutOrder = 2
 
 	local reachXSlider = makeSlider(playerTab, "Reach X", 1, MAX_REACH, reachX, function(val)
 		reachX = val
 		updateReachVisual()
 	end)
-	reachXSlider.LayoutOrder = 3
 
 	local reachYSlider = makeSlider(playerTab, "Reach Y", 1, MAX_REACH, reachY, function(val)
 		reachY = val
 		updateReachVisual()
 	end)
-	reachYSlider.LayoutOrder = 4
 
 	local reachZSlider = makeSlider(playerTab, "Reach Z", 1, MAX_REACH, reachZ, function(val)
 		reachZ = val
 		updateReachVisual()
 	end)
-	reachZSlider.LayoutOrder = 5
 
 	local transparencySlider = makeSlider(playerTab, "Transparency", 0, 1, reachTransparency, function(val)
-		-- Map slider int 0..1 to float [0..1] with clamp & format
 		reachTransparency = math.clamp(val, 0, 1)
 		updateReachVisual()
 	end)
-	transparencySlider.LayoutOrder = 6
 end
