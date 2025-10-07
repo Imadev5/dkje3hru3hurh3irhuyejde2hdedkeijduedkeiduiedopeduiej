@@ -305,7 +305,7 @@ local function createMain()
         return container
     end
 
-    ---[[ NEW FUNCTION: Creates a slider element ]]--
+    -- Slider creation function
     local function createSlider(parent, labelText, descText, min, max, initial, callback)
         local container = Instance.new("Frame", parent)
         container.Size = UDim2.new(1, -16, 0, 80)
@@ -421,7 +421,7 @@ local function createMain()
         Buttons = buttons,
         TabFrames = tabFrames,
         CreateToggle = createToggle,
-        CreateSlider = createSlider -- Return the new function
+        CreateSlider = createSlider
     }
 end
 
@@ -479,7 +479,6 @@ end
 -- Hook up sidebar buttons
 for name, btn in pairs(ui.Buttons) do
     btn.MouseButton1Click:Connect(function()
-        -- Use btn.Name which was set correctly in the creation function
         switchTo(btn.Name)
     end)
 end
@@ -499,7 +498,6 @@ end)
 -- SCRIPT LOGIC AND FEATURES
 -- ===============================================
 
--- Find the Player Tab for adding new features
 local playerTab = ui.TabFrames["Player"]
 if not playerTab then
     warn("Player tab not found! Cannot add features.")
@@ -507,7 +505,7 @@ if not playerTab then
 end
 
 -- =========================
--- Infinite Stamina Logic (RESTORED TO ORIGINAL)
+-- Infinite Stamina Logic
 -- =========================
 local staminaConn
 local staminaOn = false
@@ -517,7 +515,6 @@ local function hookStamina()
         staminaConn:Disconnect()
         staminaConn = nil
     end
-    -- Use pcall to prevent errors if the path doesn't exist
     local ok, stamina = pcall(function()
         return LocalPlayer:WaitForChild("PlayerScripts")
             :WaitForChild("controllers"):WaitForChild("movementController")
@@ -532,27 +529,23 @@ local function hookStamina()
     end
 end
 
--- Create toggle in Player tab using the original logic
-ui.CreateToggle(
-    playerTab, 
-    "Infinite Stamina", 
-    "Never run out of stamina while playing", 
-    false, 
-    function(state)
-        staminaOn = state
-        if staminaOn then
-            hookStamina() -- Re-hook when toggled on
-        else
-            if staminaConn then
-                staminaConn:Disconnect()
-                staminaConn = nil
-            end
+ui.CreateToggle(playerTab, "Infinite Stamina", "Never run out of stamina while playing", false, function(state)
+    staminaOn = state
+    if staminaOn then
+        hookStamina()
+    else
+        if staminaConn then
+            staminaConn:Disconnect()
+            staminaConn = nil
         end
     end
-)
+end)
 
--- Initial call to hook stamina when the script runs
-hookStamina()
+-- [[ THE FIX IS HERE ]]
+-- The original script froze because it was waiting for the stamina object to load.
+-- By wrapping hookStamina() in task.spawn, we run it in a separate thread.
+-- This allows the UI animations to run immediately without getting the script stuck.
+task.spawn(hookStamina)
 
 
 -- =========================
@@ -564,7 +557,6 @@ local reachVisual = nil
 local reachConn = nil
 local currentBall = nil
 
--- Bypass Reach (Kept as is per request)
 pcall(function()
     if getgc and hookfunction then
         for _, v in ipairs(getgc(true)) do
@@ -576,7 +568,6 @@ pcall(function()
     end
 end)
 
--- Helper function to fire touch events
 local function fireTouch(ball, limb)
     if firetouchinterest then
         pcall(firetouchinterest, ball, limb, 0)
@@ -585,19 +576,15 @@ local function fireTouch(ball, limb)
     end
 end
 
--- Main reach loop (optimized)
 local function startReachLoop()
-    if reachConn then return end -- Already running
+    if reachConn then return end
     reachConn = RunService.Heartbeat:Connect(function()
         if not reachOn then return end
-
         local char = LocalPlayer.Character
         local root = char and char:FindFirstChild("HumanoidRootPart")
         if not root then return end
-
-        -- Optimized ball finding: only search if the ball is missing
         if not currentBall or not currentBall.Parent then
-            currentBall = nil -- Reset if parent is nil
+            currentBall = nil
             for _, v in ipairs(workspace:GetChildren()) do
                 if v:IsA("Part") and v:FindFirstChild("network") then
                     currentBall = v
@@ -605,13 +592,10 @@ local function startReachLoop()
                 end
             end
         end
-
-        if not currentBall then return end -- No ball in workspace, do nothing
-
+        if not currentBall then return end
         if (currentBall.Position - root.Position).Magnitude <= reachDist then
             for _, limb in ipairs(char:GetChildren()) do
                 if limb:IsA("BasePart") then
-                    -- Use task.spawn to avoid yielding the entire loop
                     task.spawn(fireTouch, currentBall, limb)
                 end
             end
@@ -619,11 +603,9 @@ local function startReachLoop()
     end)
 end
 
--- Function to create or get the reach visualizer
 local function manageReachVisual()
     local char = LocalPlayer.Character
     if not char then return end
-
     if not reachVisual or not reachVisual.Parent then
         reachVisual = Instance.new("Part")
         reachVisual.Name = "ReachVisualizer"
@@ -633,28 +615,22 @@ local function manageReachVisual()
         reachVisual.Anchored = false
         reachVisual.CanCollide = false
         reachVisual.CanTouch = false
-        
         local weld = Instance.new("WeldConstraint")
         weld.Part0 = char:WaitForChild("HumanoidRootPart")
         weld.Part1 = reachVisual
         weld.Parent = reachVisual
-        
         reachVisual.Parent = char
     end
-    
     reachVisual.Size = Vector3.new(reachDist * 2, reachDist * 2, reachDist * 2)
 end
 
--- Create UI Controls for Reach in the Player Tab
 ui.CreateToggle(playerTab, "Enable Reach", "Automatically touch the ball from a distance", false, function(state)
     reachOn = state
     if reachOn then
         manageReachVisual()
         startReachLoop()
-        if reachVisual then 
-            local transparencySliderValue = 0.5 -- A default or stored value
-            -- This is a bit tricky since the slider might not exist yet. We'll handle initial transparency here.
-            reachVisual.Transparency = 1 - transparencySliderValue
+        if reachVisual then
+             reachVisual.Transparency = 0.5
         end 
     else
         if reachVisual then reachVisual.Transparency = 1 end
@@ -669,7 +645,7 @@ ui.CreateSlider(playerTab, "Reach Distance", "How far the reach extends (in stud
 end)
 
 ui.CreateSlider(playerTab, "Visualizer Transparency", "Controls the visibility of the reach sphere", 0, 1, 0.5, function(value)
-    if reachVisual then -- Apply transparency regardless of reach being on, so it can be preset
-        reachVisual.Transparency = 1 - value -- Invert so slider at 1 is fully visible
+    if reachVisual then
+        reachVisual.Transparency = 1 - value
     end
 end)
