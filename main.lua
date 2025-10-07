@@ -99,7 +99,6 @@ local function createMain()
         tween(closeButton, {BackgroundColor3 = Color3.fromRGB(220, 60, 60)}, 0.15)
     end)
 
-    -- Sidebar
     local sidebar = Instance.new("Frame", frame)
     sidebar.Name = "Sidebar"
     sidebar.Size = UDim2.new(0, 150, 1, -42)
@@ -441,30 +440,181 @@ end
 hookStamina()
 
 -- =========================
--- Reach ultra lagless logic! (no cooldown, ball scan every 6 sec, logic runs every frame)
+-- Ball Prediction System (Optimized)
 -- =========================
-do
-	for _, v in ipairs(getgc(true)) do
-		if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
-			hookfunction(v.overlapCheck, function() return true end)
-			hookfunction(v.gkCheck, function() return true end)
-		end
-	end
+local ballTab = ui.TabFrames["Ball"]
+local predictionOn = false
+local predictionConn
+local predictionLine
+local predictionDot
+local ballName = "Ball"
+local lastPredictionUpdate = 0
+local PREDICTION_UPDATE_RATE = 0.1 -- Update 10 times per second instead of 60+
+
+local function createPredictionVisuals()
+    if predictionLine then predictionLine:Destroy() end
+    if predictionDot then predictionDot:Destroy() end
+    
+    predictionLine = Instance.new("Part")
+    predictionLine.Name = "BallPredictionLine"
+    predictionLine.Anchored = true
+    predictionLine.CanCollide = false
+    predictionLine.Transparency = 0.3
+    predictionLine.Size = Vector3.new(0.3, 1, 0.3)
+    predictionLine.Color = Color3.fromRGB(255, 255, 0)
+    predictionLine.Material = Enum.Material.Neon
+    predictionLine.Parent = workspace
+    
+    predictionDot = Instance.new("Part")
+    predictionDot.Name = "BallPredictionDot"
+    predictionDot.Anchored = true
+    predictionDot.CanCollide = false
+    predictionDot.Transparency = 0.2
+    predictionDot.Size = Vector3.new(4, 0.2, 4)
+    predictionDot.Shape = Enum.PartType.Cylinder
+    predictionDot.Color = Color3.fromRGB(255, 255, 0)
+    predictionDot.Material = Enum.Material.Neon
+    predictionDot.Parent = workspace
 end
 
+local cachedPredictionBall = nil
+local lastBallScanForPrediction = 0
+
+local function getBallForPrediction()
+    if tick() - lastBallScanForPrediction > 3 then -- Only scan every 3 seconds
+        for _, obj in ipairs(workspace:GetChildren()) do
+            if obj:IsA("Part") and obj.Name == ballName then
+                cachedPredictionBall = obj
+                break
+            end
+        end
+        lastBallScanForPrediction = tick()
+    end
+    return cachedPredictionBall
+end
+
+local function predictBallPath(ball)
+    local velocity = ball.Velocity
+    local position = ball.Position
+    local gravity = 196.2
+    
+    if velocity.Magnitude < 3 then
+        if predictionLine then predictionLine.Visible = false end
+        if predictionDot then predictionDot.Visible = false end
+        return
+    end
+    
+    local timeToGround = 2
+    if velocity.Y > 0 or position.Y > 10 then
+        local a = -gravity / 2
+        local b = velocity.Y
+        local c = position.Y - 4
+        local discriminant = b * b - 4 * a * c
+        if discriminant >= 0 then
+            timeToGround = (-b - math.sqrt(discriminant)) / (2 * a)
+            if timeToGround < 0 then
+                timeToGround = (-b + math.sqrt(discriminant)) / (2 * a)
+            end
+        end
+    end
+    
+    timeToGround = math.min(timeToGround, 4)
+    
+    local predictedX = position.X + velocity.X * timeToGround
+    local predictedZ = position.Z + velocity.Z * timeToGround
+    local predictedY = math.max(position.Y + velocity.Y * timeToGround - 0.5 * gravity * timeToGround * timeToGround, 4)
+    
+    local landingPos = Vector3.new(predictedX, predictedY, predictedZ)
+    
+    if predictionLine and predictionDot then
+        predictionLine.Visible = true
+        predictionDot.Visible = true
+        
+        local midPoint = (position + landingPos) * 0.5
+        local distance = (position - landingPos).Magnitude
+        
+        predictionLine.Size = Vector3.new(0.3, distance, 0.3)
+        predictionLine.Position = midPoint
+        predictionLine.CFrame = CFrame.lookAt(midPoint, landingPos)
+        
+        predictionDot.Position = Vector3.new(landingPos.X, landingPos.Y - 0.1, landingPos.Z)
+        predictionDot.CFrame = predictionDot.CFrame * CFrame.Angles(0, 0, math.rad(90))
+    end
+end
+
+local function enableBallPrediction(state)
+    predictionOn = state
+    if predictionOn then
+        createPredictionVisuals()
+        if not predictionConn then
+            predictionConn = RunService.Heartbeat:Connect(function()
+                if tick() - lastPredictionUpdate < PREDICTION_UPDATE_RATE then return end
+                lastPredictionUpdate = tick()
+                
+                local ball = getBallForPrediction()
+                if ball and ball.Parent then
+                    predictBallPath(ball)
+                else
+                    if predictionLine then predictionLine.Visible = false end
+                    if predictionDot then predictionDot.Visible = false end
+                end
+            end)
+        end
+    else
+        if predictionLine then 
+            predictionLine:Destroy() 
+            predictionLine = nil
+        end
+        if predictionDot then 
+            predictionDot:Destroy() 
+            predictionDot = nil
+        end
+        if predictionConn then
+            predictionConn:Disconnect()
+            predictionConn = nil
+        end
+    end
+end
+
+if ballTab then
+    ui.CreateToggle(
+        ballTab,
+        "Ball Prediction",
+        "FIFA-style line showing where the ball will land",
+        false,
+        enableBallPrediction
+    )
+end
+
+-- =========================
+-- Reach bypass hooks
+-- =========================
+do
+    local success = pcall(function()
+        for _, v in ipairs(getgc(true)) do
+            if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
+                hookfunction(v.overlapCheck, function() return true end)
+                hookfunction(v.gkCheck, function() return true end)
+            end
+        end
+    end)
+end
+
+-- =========================
+-- Reach System (Ultra Optimized)
+-- =========================
 local MAX_REACH = 1000
 local reachOn = false
 local reachX, reachY, reachZ = 5, 5, 5
 local reachTransparency = 0.5
 local reachHitbox, reachConn
-local ballName = "Ball" -- set to your ball's name or class if needed
+local cachedReachBall = nil
+local lastReachBallScan = 0
+local BALL_SCAN_INTERVAL = 3 -- Scan every 3 seconds
+local lastReachUpdate = 0
+local REACH_UPDATE_RATE = 0.016 -- ~60fps for smooth hitbox movement
 
--- Find the ball only every 6 seconds for best performance
-local cachedBall = nil
-local lastBallScanTime = 0
-local BALL_SCAN_INTERVAL = 6
-
-local function scanBall()
+local function scanForReachBall()
     for _, obj in ipairs(workspace:GetChildren()) do
         if obj:IsA("Part") and obj.Name == ballName and obj:FindFirstChild("network") then
             return obj
@@ -500,11 +650,11 @@ end
 
 local function touchBall(ball, char)
     local limbs = {
-        char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
-        char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm"),
-        char:FindFirstChild("Left Leg") or char:FindFirstChild("LeftUpperLeg"),
-        char:FindFirstChild("Right Leg") or char:FindFirstChild("RightUpperLeg"),
-        char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+        char:FindFirstChild("LeftUpperArm") or char:FindFirstChild("Left Arm"),
+        char:FindFirstChild("RightUpperArm") or char:FindFirstChild("Right Arm"),
+        char:FindFirstChild("LeftUpperLeg") or char:FindFirstChild("Left Leg"),
+        char:FindFirstChild("RightUpperLeg") or char:FindFirstChild("Right Leg"),
+        char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso")
     }
     for _, limb in ipairs(limbs) do
         if limb then
@@ -518,24 +668,33 @@ local function enableReach(state)
     reachOn = state
     if reachOn then
         createReachVisual()
-        cachedBall = nil
+        cachedReachBall = nil
         if not reachConn then
             reachConn = RunService.Heartbeat:Connect(function()
-                -- Scan for new ball every 6 seconds
-                if tick() - lastBallScanTime > BALL_SCAN_INTERVAL then
-                    cachedBall = scanBall()
-                    lastBallScanTime = tick()
+                local now = tick()
+                
+                -- Ball scanning (every 3 seconds)
+                if now - lastReachBallScan > BALL_SCAN_INTERVAL then
+                    cachedReachBall = scanForReachBall()
+                    lastReachBallScan = now
                 end
-                -- Always update hitbox position and logic!
-                local char = LocalPlayer.Character
-                local root = char and char:FindFirstChild("HumanoidRootPart")
-                if root and reachHitbox then
-                    reachHitbox.Position = root.Position
-                    updateReachVisual()
-                end
-                if not (char and root and cachedBall) then return end
-                if canTouch(cachedBall, root) then
-                    touchBall(cachedBall, char)
+                
+                -- Hitbox update (60fps)
+                if now - lastReachUpdate >= REACH_UPDATE_RATE then
+                    lastReachUpdate = now
+                    local char = LocalPlayer.Character
+                    local root = char and char:FindFirstChild("HumanoidRootPart")
+                    if root and reachHitbox then
+                        reachHitbox.Position = root.Position
+                        updateReachVisual()
+                    end
+                    
+                    -- Touch logic
+                    if char and root and cachedReachBall and cachedReachBall.Parent then
+                        if canTouch(cachedReachBall, root) then
+                            touchBall(cachedReachBall, char)
+                        end
+                    end
                 end
             end)
         end
