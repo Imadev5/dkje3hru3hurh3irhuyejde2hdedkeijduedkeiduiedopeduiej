@@ -471,77 +471,75 @@ local predictionParts = {}
 
 local function clearPrediction()
 	for _, part in ipairs(predictionParts) do
-		if part and part.Parent then
-			part:Destroy()
-		end
+		pcall(function()
+			if part and part.Parent then
+				part:Destroy()
+			end
+		end)
 	end
 	predictionParts = {}
 end
 
-local function predictBall(ball)
-	if not ball or not ball.Parent then return end
-	
-	local vel = ball.AssemblyLinearVelocity
-	if vel.Magnitude < 3 then
-		clearPrediction()
-		return
-	end
-	
+local function predictBallPath(ball)
 	clearPrediction()
 	
-	local pos = ball.Position
-	local dt = 0.08
-	local gravity = Vector3.new(0, -workspace.Gravity, 0)
+	local velocity = ball.AssemblyLinearVelocity
+	if velocity.Magnitude < 3 then return end
 	
-	for i = 1, 18 do
-		vel = vel + gravity * dt
-		pos = pos + vel * dt
+	local currentPos = ball.Position
+	local currentVel = velocity
+	local gravity = Vector3.new(0, -workspace.Gravity, 0)
+	local timeStep = 0.05
+	
+	for i = 1, 30 do
+		currentVel = currentVel + (gravity * timeStep)
+		local nextPos = currentPos + (currentVel * timeStep)
 		
-		local marker = Instance.new("Part")
-		marker.Size = Vector3.new(0.35, 0.35, 0.35)
-		marker.Position = pos
-		marker.Anchored = true
-		marker.CanCollide = false
-		marker.Transparency = 0.3 + (i * 0.035)
-		marker.Color = Color3.fromRGB(70, 75, 210)
-		marker.Material = Enum.Material.Neon
-		marker.Shape = Enum.PartType.Ball
-		marker.Parent = workspace
+		local line = Instance.new("Part")
+		line.Size = Vector3.new(0.2, 0.2, (currentPos - nextPos).Magnitude)
+		line.CFrame = CFrame.new(currentPos:Lerp(nextPos, 0.5), nextPos)
+		line.Anchored = true
+		line.CanCollide = false
+		line.Transparency = 0.3 + (i * 0.02)
+		line.Color = Color3.fromRGB(70, 75, 210)
+		line.Material = Enum.Material.Neon
+		line.Parent = workspace
+		table.insert(predictionParts, line)
 		
-		table.insert(predictionParts, marker)
-		
-		if i % 4 == 0 then
+		if i % 5 == 0 then
 			local rayParams = RaycastParams.new()
 			rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 			rayParams.FilterDescendantsInstances = {LocalPlayer.Character, ball}
 			
-			local result = workspace:Raycast(pos, Vector3.new(0, -500, 0), rayParams)
-			if result then
-				local beam = Instance.new("Part")
-				beam.Size = Vector3.new(0.08, (pos - result.Position).Magnitude, 0.08)
-				beam.CFrame = CFrame.new(pos:Lerp(result.Position, 0.5), result.Position)
-				beam.Anchored = true
-				beam.CanCollide = false
-				beam.Transparency = 0.65
-				beam.Color = Color3.fromRGB(70, 75, 210)
-				beam.Material = Enum.Material.Neon
-				beam.Parent = workspace
-				table.insert(predictionParts, beam)
+			local rayResult = workspace:Raycast(nextPos, Vector3.new(0, -500, 0), rayParams)
+			if rayResult then
+				local dropLine = Instance.new("Part")
+				dropLine.Size = Vector3.new(0.15, (nextPos - rayResult.Position).Magnitude, 0.15)
+				dropLine.CFrame = CFrame.new(nextPos:Lerp(rayResult.Position, 0.5), rayResult.Position)
+				dropLine.Anchored = true
+				dropLine.CanCollide = false
+				dropLine.Transparency = 0.5
+				dropLine.Color = Color3.fromRGB(255, 200, 50)
+				dropLine.Material = Enum.Material.Neon
+				dropLine.Parent = workspace
+				table.insert(predictionParts, dropLine)
 				
-				if i == 4 or i == 12 then
-					local ground = Instance.new("Part")
-					ground.Size = Vector3.new(1.2, 0.08, 1.2)
-					ground.Position = result.Position + Vector3.new(0, 0.04, 0)
-					ground.Anchored = true
-					ground.CanCollide = false
-					ground.Transparency = 0.4
-					ground.Color = Color3.fromRGB(255, 200, 50)
-					ground.Material = Enum.Material.Neon
-					ground.Parent = workspace
-					table.insert(predictionParts, ground)
-				end
+				local marker = Instance.new("Part")
+				marker.Size = Vector3.new(1, 0.1, 1)
+				marker.Position = rayResult.Position + Vector3.new(0, 0.05, 0)
+				marker.Anchored = true
+				marker.CanCollide = false
+				marker.Transparency = 0.4
+				marker.Color = Color3.fromRGB(255, 200, 50)
+				marker.Material = Enum.Material.Neon
+				marker.Shape = Enum.PartType.Cylinder
+				marker.Orientation = Vector3.new(0, 0, 90)
+				marker.Parent = workspace
+				table.insert(predictionParts, marker)
 			end
 		end
+		
+		currentPos = nextPos
 	end
 end
 
@@ -551,9 +549,9 @@ local function togglePrediction(state)
 	if predictionEnabled then
 		if not predictionConn then
 			predictionConn = RunService.Heartbeat:Connect(function()
-				for _, ball in ipairs(workspace:GetDescendants()) do
-					if ball:IsA("Part") and ball:FindFirstChild("network") then
-						predictBall(ball)
+				for _, obj in ipairs(workspace:GetDescendants()) do
+					if obj:IsA("Part") and obj:FindFirstChild("network") then
+						predictBallPath(obj)
 						break
 					end
 				end
@@ -684,6 +682,8 @@ if playerTab then
 		staminaEnabled = state
 		if state then setupStamina() end
 	end)
+	
+	ui.CreateToggle(playerTab, "Speed", "2x faster movement", false, toggleSpeed)
 	
 	ui.CreateToggle(playerTab, "Reach", "Extend touch range", false, toggleReach)
 	
