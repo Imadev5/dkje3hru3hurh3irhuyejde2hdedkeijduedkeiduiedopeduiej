@@ -318,29 +318,29 @@ local function setupStamina()
 end
 
 -- REACH BYPASS
-task.spawn(function()
+do
 	for _, v in ipairs(getgc(true)) do
 		if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
 			hookfunction(v.overlapCheck, function() return true end)
 			hookfunction(v.gkCheck, function() return true end)
 		end
 	end
-end)
+end
 
 -- REACH SYSTEM
 local reachEnabled = false
-local reachX, reachY, reachZ = 12, 12, 12
+local reachDist = 8
 local MAX_REACH = 50
 local reachVis = 0.6
 
 local reachBox
 local reachConn
-local ballCache = {}
-local touchCooldowns = {}
+local lastBallScan = 0
+local BALL_SCAN_RATE = 0.5
 
 local function updateReachBox()
 	if reachBox then
-		reachBox.Size = Vector3.new(reachX, reachY, reachZ)
+		reachBox.Size = Vector3.new(reachDist * 2, reachDist * 2, reachDist * 2)
 		reachBox.Transparency = reachVis
 	end
 end
@@ -352,78 +352,50 @@ local function createReachBox()
 	reachBox.Anchored = true
 	reachBox.CanCollide = false
 	reachBox.Transparency = reachVis
-	reachBox.Size = Vector3.new(reachX, reachY, reachZ)
+	reachBox.Size = Vector3.new(reachDist * 2, reachDist * 2, reachDist * 2)
 	reachBox.Color = Color3.fromRGB(70, 75, 210)
 	reachBox.Material = Enum.Material.ForceField
+	reachBox.Shape = Enum.PartType.Ball
 	reachBox.Parent = workspace
 end
 
-local function cacheBalls()
-	ballCache = {}
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("Part") and obj:FindFirstChild("network") then
-			table.insert(ballCache, obj)
-		end
-	end
+local function fireTouch(ball, limb)
+	pcall(function()
+		firetouchinterest(ball, limb, 0)
+		task.wait(0.03)
+		firetouchinterest(ball, limb, 1)
+	end)
 end
-
-task.spawn(function()
-	while task.wait(1.5) do
-		if reachEnabled then
-			cacheBalls()
-		end
-	end
-end)
 
 local function toggleReach(state)
 	reachEnabled = state
 	
 	if reachEnabled then
 		createReachBox()
-		cacheBalls()
 		
 		if not reachConn then
 			reachConn = RunService.Heartbeat:Connect(function()
 				local char = LocalPlayer.Character
-				local hrp = char and char:FindFirstChild("HumanoidRootPart")
+				local root = char and char:FindFirstChild("HumanoidRootPart")
 				
-				if hrp and reachBox then
-					reachBox.CFrame = hrp.CFrame
+				if root and reachBox then
+					reachBox.Position = root.Position
 				end
 				
-				if not hrp then return end
+				if not root then return end
 				
 				local now = tick()
-				for _, ball in ipairs(ballCache) do
-					if not ball or not ball.Parent then continue end
-					
-					local ballID = ball:GetDebugId()
-					if touchCooldowns[ballID] and (now - touchCooldowns[ballID] < 0.3) then
-						continue
-					end
-					
-					local dist = (ball.Position - hrp.Position).Magnitude
-					if dist > 80 then continue end
-					
-					local offset = ball.Position - hrp.Position
-					if math.abs(offset.X) <= reachX/2 and 
-					   math.abs(offset.Y) <= reachY/2 and 
-					   math.abs(offset.Z) <= reachZ/2 then
-						
-						touchCooldowns[ballID] = now
-						
-						local limbs = {
-							char:FindFirstChild("Left Arm") or char:FindFirstChild("LeftUpperArm"),
-							char:FindFirstChild("Right Arm") or char:FindFirstChild("RightUpperArm")
-						}
-						
-						for _, limb in ipairs(limbs) do
-							if limb then
-								pcall(function()
-									firetouchinterest(ball, limb, 0)
-									firetouchinterest(ball, limb, 1)
-								end)
-								break
+				if now - lastBallScan < BALL_SCAN_RATE then return end
+				lastBallScan = now
+				
+				for _, ball in ipairs(workspace:GetDescendants()) do
+					if ball:IsA("Part") and ball:FindFirstChild("network") then
+						local dist = (ball.Position - root.Position).Magnitude
+						if dist <= reachDist then
+							for _, limb in pairs(char:GetDescendants()) do
+								if limb:IsA("BasePart") and (limb.Name:find("Arm") or limb.Name:find("Leg") or limb.Name:find("Torso")) then
+									task.spawn(fireTouch, ball, limb)
+								end
 							end
 						end
 					end
@@ -439,7 +411,6 @@ local function toggleReach(state)
 			reachConn:Disconnect()
 			reachConn = nil
 		end
-		touchCooldowns = {}
 	end
 end
 
