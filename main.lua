@@ -468,6 +468,7 @@ end
 local predictionEnabled = false
 local predictionConn
 local predictionParts = {}
+local predictionAttachment = nil
 
 local function clearPrediction()
 	for _, part in ipairs(predictionParts) do
@@ -478,68 +479,94 @@ local function clearPrediction()
 		end)
 	end
 	predictionParts = {}
+	
+	if predictionAttachment and predictionAttachment.Parent then
+		predictionAttachment:Destroy()
+	end
+	predictionAttachment = nil
 end
 
-local function predictBallPath(ball)
-	clearPrediction()
+local function createPredictionTrail(ball)
+	if predictionAttachment then
+		predictionAttachment:Destroy()
+	end
+	
+	predictionAttachment = Instance.new("Attachment", ball)
+	
+	local trail = Instance.new("Trail", ball)
+	trail.Attachment0 = predictionAttachment
+	trail.Attachment1 = predictionAttachment
+	trail.FaceCamera = true
+	trail.Color = ColorSequence.new(Color3.fromRGB(70, 75, 210))
+	trail.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.3),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	trail.Lifetime = 2
+	trail.MinLength = 0
+	trail.WidthScale = NumberSequence.new(1)
+	trail.Enabled = true
+	
+	table.insert(predictionParts, trail)
+	table.insert(predictionParts, predictionAttachment)
+end
+
+local function createLandingMarker(position)
+	local marker = Instance.new("Part")
+	marker.Size = Vector3.new(2, 0.1, 2)
+	marker.Position = position + Vector3.new(0, 0.1, 0)
+	marker.Anchored = true
+	marker.CanCollide = false
+	marker.Transparency = 0.4
+	marker.Color = Color3.fromRGB(255, 200, 50)
+	marker.Material = Enum.Material.Neon
+	marker.Parent = workspace
+	
+	local billboard = Instance.new("BillboardGui", marker)
+	billboard.Size = UDim2.new(4, 0, 4, 0)
+	billboard.Adornee = marker
+	billboard.AlwaysOnTop = true
+	
+	local circle = Instance.new("ImageLabel", billboard)
+	circle.Size = UDim2.new(1, 0, 1, 0)
+	circle.BackgroundTransparency = 1
+	circle.Image = "rbxassetid://12272370792"
+	circle.ImageColor3 = Color3.fromRGB(255, 200, 50)
+	circle.ImageTransparency = 0.3
+	
+	table.insert(predictionParts, marker)
+	
+	task.delay(2, function()
+		if marker and marker.Parent then
+			marker:Destroy()
+		end
+	end)
+end
+
+local function predictBallLanding(ball)
+	if not ball or not ball.Parent then return end
 	
 	local velocity = ball.AssemblyLinearVelocity
-	if velocity.Magnitude < 3 then return end
+	if velocity.Magnitude < 5 then return end
 	
-	local currentPos = ball.Position
-	local currentVel = velocity
+	local position = ball.Position
+	local vel = velocity
 	local gravity = Vector3.new(0, -workspace.Gravity, 0)
-	local timeStep = 0.05
+	local dt = 0.1
 	
-	for i = 1, 30 do
-		currentVel = currentVel + (gravity * timeStep)
-		local nextPos = currentPos + (currentVel * timeStep)
+	for i = 1, 50 do
+		vel = vel + (gravity * dt)
+		position = position + (vel * dt)
 		
-		local line = Instance.new("Part")
-		line.Size = Vector3.new(0.2, 0.2, (currentPos - nextPos).Magnitude)
-		line.CFrame = CFrame.new(currentPos:Lerp(nextPos, 0.5), nextPos)
-		line.Anchored = true
-		line.CanCollide = false
-		line.Transparency = 0.3 + (i * 0.02)
-		line.Color = Color3.fromRGB(70, 75, 210)
-		line.Material = Enum.Material.Neon
-		line.Parent = workspace
-		table.insert(predictionParts, line)
+		local rayParams = RaycastParams.new()
+		rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+		rayParams.FilterDescendantsInstances = {LocalPlayer.Character, ball}
 		
-		if i % 5 == 0 then
-			local rayParams = RaycastParams.new()
-			rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-			rayParams.FilterDescendantsInstances = {LocalPlayer.Character, ball}
-			
-			local rayResult = workspace:Raycast(nextPos, Vector3.new(0, -500, 0), rayParams)
-			if rayResult then
-				local dropLine = Instance.new("Part")
-				dropLine.Size = Vector3.new(0.15, (nextPos - rayResult.Position).Magnitude, 0.15)
-				dropLine.CFrame = CFrame.new(nextPos:Lerp(rayResult.Position, 0.5), rayResult.Position)
-				dropLine.Anchored = true
-				dropLine.CanCollide = false
-				dropLine.Transparency = 0.5
-				dropLine.Color = Color3.fromRGB(255, 200, 50)
-				dropLine.Material = Enum.Material.Neon
-				dropLine.Parent = workspace
-				table.insert(predictionParts, dropLine)
-				
-				local marker = Instance.new("Part")
-				marker.Size = Vector3.new(1, 0.1, 1)
-				marker.Position = rayResult.Position + Vector3.new(0, 0.05, 0)
-				marker.Anchored = true
-				marker.CanCollide = false
-				marker.Transparency = 0.4
-				marker.Color = Color3.fromRGB(255, 200, 50)
-				marker.Material = Enum.Material.Neon
-				marker.Shape = Enum.PartType.Cylinder
-				marker.Orientation = Vector3.new(0, 0, 90)
-				marker.Parent = workspace
-				table.insert(predictionParts, marker)
-			end
+		local result = workspace:Raycast(position, Vector3.new(0, -5, 0), rayParams)
+		if result then
+			createLandingMarker(result.Position)
+			break
 		end
-		
-		currentPos = nextPos
 	end
 end
 
@@ -549,9 +576,14 @@ local function togglePrediction(state)
 	if predictionEnabled then
 		if not predictionConn then
 			predictionConn = RunService.Heartbeat:Connect(function()
+				if not predictionEnabled then return end
+				
+				clearPrediction()
+				
 				for _, obj in ipairs(workspace:GetDescendants()) do
 					if obj:IsA("Part") and obj:FindFirstChild("network") then
-						predictBallPath(obj)
+						createPredictionTrail(obj)
+						predictBallLanding(obj)
 						break
 					end
 				end
