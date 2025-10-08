@@ -29,7 +29,7 @@ local function createMain()
     shadow.Size = UDim2.new(0, 600, 0, 400)
     shadow.Position = UDim2.new(0.5, 0, 0.5, 0)
     shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    shadow.BackgroundTransparency = 1  -- Start invisible for animation
+    shadow.BackgroundTransparency = 0.85
     shadow.BorderSizePixel = 0
     shadow.ZIndex = 0
     local shadowCorner = Instance.new("UICorner", shadow)
@@ -162,7 +162,7 @@ local function createMain()
     -- Sidebar
     local sidebar = Instance.new("Frame", inner)
     sidebar.Name = "Sidebar"
-    sidebar.Size = UDim2.new(0, 160, 1, -93)  -- Adjusted for footer
+    sidebar.Size = UDim2.new(0, 160, 1, -63)
     sidebar.Position = UDim2.new(0, 0, 0, 63)
     sidebar.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
     sidebar.BorderSizePixel = 0
@@ -255,7 +255,7 @@ local function createMain()
     -- Content area
     local content = Instance.new("Frame", inner)
     content.Name = "Content"
-    content.Size = UDim2.new(1, -170, 1, -93)  -- Adjusted for footer
+    content.Size = UDim2.new(1, -170, 1, -63)
     content.Position = UDim2.new(0, 170, 0, 63)
     content.BackgroundTransparency = 1
     content.BorderSizePixel = 0
@@ -312,24 +312,6 @@ local function createMain()
         tabFrames[name].Visible = false
     end
     tabFrames["Ball"].Visible = true
-
-    -- Footer with credits
-    local footer = Instance.new("Frame", inner)
-    footer.Name = "Footer"
-    footer.Size = UDim2.new(1, 0, 0, 30)
-    footer.Position = UDim2.new(0, 0, 1, -30)
-    footer.BackgroundTransparency = 1
-    footer.BorderSizePixel = 0
-
-    local credits = Instance.new("TextLabel", footer)
-    credits.Size = UDim2.new(1, 0, 1, 0)
-    credits.BackgroundTransparency = 1
-    credits.Text = "Made by justice"
-    credits.TextColor3 = Color3.fromRGB(150, 150, 160)
-    credits.Font = Enum.Font.Gotham
-    credits.TextSize = 12
-    credits.TextXAlignment = Enum.TextXAlignment.Center
-    credits.ZIndex = 3
 
     -- Toggle component (refined appearance)
     local function createToggle(parent, labelText, descText, initialState, callback)
@@ -412,7 +394,6 @@ local function createMain()
 
     return {
         Root = frame,
-        Shadow = shadow,
         Close = closeButton,
         Buttons = buttons,
         TabFrames = tabFrames,
@@ -422,42 +403,15 @@ end
 
 local ui = createMain()
 
--- Opening animation
-tween(ui.Shadow, {BackgroundTransparency = 0.85}, 0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-tween(ui.Root, {Size = UDim2.new(0, 580, 0, 380), Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.4, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
-
-local currentTab = "Ball"
-
 local function switchTo(tabName)
-    if tabName == currentTab then return end
     if not ui.TabFrames[tabName] then return end
-
-    local oldFrame = ui.TabFrames[currentTab]
-    local newFrame = ui.TabFrames[tabName]
-
-    newFrame.Position = UDim2.new(1, 0, 0, 8)
-    newFrame.Visible = true
-
-    tween(newFrame, {Position = UDim2.new(0, 8, 0, 8)}, 0.25, Enum.EasingStyle.Quad)
-    local oldTween = tween(oldFrame, {Position = UDim2.new(-1, 0, 0, 8)}, 0.25, Enum.EasingStyle.Quad)
-    oldTween.Completed:Connect(function()
-        oldFrame.Visible = false
-        oldFrame.Position = UDim2.new(0, 8, 0, 8)
-    end)
-
-    -- Highlight active button
-    for name, btn in pairs(ui.Buttons) do
-        local indicator = btn:FindFirstChild("Frame")
-        if indicator then
-            if name == tabName then
-                tween(indicator, {BackgroundTransparency = 0}, 0.2)
-            else
-                tween(indicator, {BackgroundTransparency = 1}, 0.2)
-            end
+    for name, frame in pairs(ui.TabFrames) do
+        if name == tabName then
+            frame.Visible = true
+        else
+            frame.Visible = false
         end
     end
-
-    currentTab = tabName
 end
 
 for name, btn in pairs(ui.Buttons) do
@@ -467,14 +421,9 @@ for name, btn in pairs(ui.Buttons) do
 end
 
 ui.Close.MouseButton1Click:Connect(function()
-    -- Closing animation
-    local closeTween = tween(ui.Root, {Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(0.5, -5, 0.5, -5)}, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-    tween(ui.Shadow, {BackgroundTransparency = 1}, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.In)
-    closeTween.Completed:Connect(function()
-        if screengui and screengui.Parent then
-            screengui:Destroy()
-        end
-    end)
+    if screengui and screengui.Parent then
+        screengui:Destroy()
+    end
 end)
 
 -- INFINITE STAMINA
@@ -570,12 +519,11 @@ local reachEnabled = false
 local reachDist = 8
 local MAX_REACH = 50
 local reachVis = 0.6
-local balls = {}  -- Cache balls
 
 local reachBox
 local reachConn
 local lastBallScan = 0
-local BALL_SCAN_RATE = 0.05  -- Increased frequency for better responsiveness
+local BALL_SCAN_RATE = 0.5
 
 local function updateReachBox()
     if reachBox then
@@ -600,7 +548,7 @@ end
 local function fireTouch(ball, limb)
     pcall(function()
         firetouchinterest(ball, limb, 0)
-        task.wait(0.01)  -- Adjusted wait for better reliability
+        task.wait(0.03)
         firetouchinterest(ball, limb, 1)
     end)
 end
@@ -626,21 +574,11 @@ local function toggleReach(state)
                 if now - lastBallScan < BALL_SCAN_RATE then return end
                 lastBallScan = now
                 
-                -- Update ball cache
-                for _, obj in ipairs(workspace:GetChildren()) do
-                    if obj:IsA("Part") and obj:FindFirstChild("network") and not table.find(balls, obj) then
-                        table.insert(balls, obj)
-                    end
-                end
-                
-                for i = #balls, 1, -1 do
-                    local ball = balls[i]
-                    if not ball or not ball.Parent then
-                        table.remove(balls, i)
-                    else
+                for _, ball in ipairs(workspace:GetDescendants()) do
+                    if ball:IsA("Part") and ball:FindFirstChild("network") then
                         local dist = (ball.Position - root.Position).Magnitude
                         if dist <= reachDist then
-                            for _, limb in ipairs(char:GetChildren()) do
+                            for _, limb in pairs(char:GetDescendants()) do
                                 if limb:IsA("BasePart") and (limb.Name:find("Arm") or limb.Name:find("Leg") or limb.Name:find("Torso")) then
                                     task.spawn(fireTouch, ball, limb)
                                 end
@@ -659,7 +597,6 @@ local function toggleReach(state)
             reachConn:Disconnect()
             reachConn = nil
         end
-        balls = {}
     end
 end
 
@@ -710,33 +647,6 @@ local function createPredictionTrail(ball)
     table.insert(predictionParts, predictionAttachment)
 end
 
-local function predictBallLanding(ball)
-    if not ball or not ball.Parent then return end
-    
-    local velocity = ball.AssemblyLinearVelocity
-    if velocity.Magnitude < 5 then return end
-    
-    local position = ball.Position
-    local vel = velocity
-    local gravity = Vector3.new(0, -workspace.Gravity, 0)
-    local dt = 0.1
-    
-    for i = 1, 50 do
-        vel = vel + (gravity * dt)
-        position = position + (vel * dt)
-        
-        local rayParams = RaycastParams.new()
-        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
-        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, ball}
-        
-        local result = workspace:Raycast(position, Vector3.new(0, -5, 0), rayParams)
-        if result then
-            createLandingMarker(result.Position)
-            break
-        end
-    end
-end
-
 local function createLandingMarker(position)
     local marker = Instance.new("Part")
     marker.Size = Vector3.new(2, 0.1, 2)
@@ -769,6 +679,33 @@ local function createLandingMarker(position)
     end)
 end
 
+local function predictBallLanding(ball)
+    if not ball or not ball.Parent then return end
+    
+    local velocity = ball.AssemblyLinearVelocity
+    if velocity.Magnitude < 5 then return end
+    
+    local position = ball.Position
+    local vel = velocity
+    local gravity = Vector3.new(0, -workspace.Gravity, 0)
+    local dt = 0.1
+    
+    for i = 1, 50 do
+        vel = vel + (gravity * dt)
+        position = position + (vel * dt)
+        
+        local rayParams = RaycastParams.new()
+        rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+        rayParams.FilterDescendantsInstances = {LocalPlayer.Character, ball}
+        
+        local result = workspace:Raycast(position, Vector3.new(0, -5, 0), rayParams)
+        if result then
+            createLandingMarker(result.Position)
+            break
+        end
+    end
+end
+
 local function togglePrediction(state)
     predictionEnabled = state
     
@@ -779,7 +716,7 @@ local function togglePrediction(state)
                 
                 clearPrediction()
                 
-                for _, obj in ipairs(workspace:GetChildren()) do
+                for _, obj in ipairs(workspace:GetDescendants()) do
                     if obj:IsA("Part") and obj:FindFirstChild("network") then
                         createPredictionTrail(obj)
                         predictBallLanding(obj)
@@ -878,13 +815,15 @@ local function makeSlider(parent, label, min, max, start, callback)
 
     sliderBtn.MouseButton1Down:Connect(function()
         dragging = true
-        tween(sliderBtn, {Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(sliderBtn.Position.X.Scale, -10, 0.5, -10)}, 0.1)
+        sliderBtn.Size = UDim2.new(0, 20, 0, 20)
+        sliderBtn.Position = UDim2.new(sliderBtn.Position.X.Scale, -10, 0.5, -10)
     end)
 
     UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 and dragging then
             dragging = false
-            tween(sliderBtn, {Size = UDim2.new(0, 18, 0, 18), Position = UDim2.new(sliderBtn.Position.X.Scale, -9, 0.5, -9)}, 0.1)
+            sliderBtn.Size = UDim2.new(0, 18, 0, 18)
+            sliderBtn.Position = UDim2.new(sliderBtn.Position.X.Scale, -9, 0.5, -9)
         end
     end)
 
@@ -898,7 +837,8 @@ local function makeSlider(parent, label, min, max, start, callback)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             dragging = true
             update(input)
-            tween(sliderBtn, {Size = UDim2.new(0, 20, 0, 20), Position = UDim2.new(sliderBtn.Position.X.Scale, -10, 0.5, -10)}, 0.1)
+            sliderBtn.Size = UDim2.new(0, 20, 0, 20)
+            sliderBtn.Position = UDim2.new(sliderBtn.Position.X.Scale, -10, 0.5, -10)
         end
     end)
 
@@ -935,6 +875,3 @@ if playerTab then
 end
 
 setupStamina()
-
--- Initial button highlight
-switchTo("Ball")
