@@ -26,8 +26,32 @@ end
 -- Main UI
 local screengui = Instance.new("ScreenGui")
 screengui.Name = "solaris_premium"
-screengui.Parent = CoreGui
+screengui.ResetOnSpawn = false
 screengui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+local function safeParentGui(gui)
+    local ok = pcall(function()
+        gui.Parent = CoreGui
+    end)
+    if not ok then
+        local pg = LocalPlayer and LocalPlayer:FindFirstChild("PlayerGui")
+        if pg then
+            gui.Parent = pg
+        else
+            gui.Parent = CoreGui
+        end
+    end
+
+    pcall(function()
+        if syn and syn.protect_gui then
+            syn.protect_gui(gui)
+        elseif protectgui then
+            protectgui(gui)
+        end
+    end)
+end
+
+safeParentGui(screengui)
 
 local function tween(instance, props, time, style, dir)
     style = style or Enum.EasingStyle.Quad
@@ -65,271 +89,9 @@ local function createMain()
                 wait(randomTime)
             end
         end)
-        end
-
-        UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-            update(input)
-        end
-    end)
-
-    sliderBg.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            dragging = true
-            update(input)
-            tween(sliderBtn, {Size = UDim2.new(0, 26, 0, 26), Position = UDim2.new(sliderBtn.Position.X.Scale, -13, 0.5, -13)}, 0.15, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            tween(btnInner, {Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(0.5, -7, 0.5, -7)}, 0.15, Enum.EasingStyle.Back)
-            tween(btnStroke, {Transparency = 0.1, Thickness = 4}, 0.15)
-            tween(frameStroke, {Color = Color3.fromRGB(100, 105, 255), Transparency = 0.3}, 0.15)
-        end
-    end)
-    
-    frame.MouseEnter:Connect(function()
-        if not dragging then
-            tween(frameStroke, {Color = Color3.fromRGB(100, 105, 255), Transparency = 0.4}, 0.2)
-            tween(frame, {BackgroundColor3 = Color3.fromRGB(18, 18, 24)}, 0.2)
-        end
-    end)
-    
-    frame.MouseLeave:Connect(function()
-        if not dragging then
-            tween(frameStroke, {Color = Color3.fromRGB(30, 30, 40), Transparency = 0.6}, 0.2)
-            tween(frame, {BackgroundColor3 = Color3.fromRGB(12, 12, 18)}, 0.2)
-        end
-    end)
-
-    return frame
-end
-
--- SETUP TABS WITH CONTENT
-local ballTab = ui.TabFrames["Ball"]
-local playerTab = ui.TabFrames["Player"]
-local gkTab = ui.TabFrames["GK"]
-local settingsTab = ui.TabFrames["Settings"]
-
-if ballTab then
-    ui.CreateToggle(ballTab, "Ball Prediction", "Advanced trajectory visualization with landing markers", false, togglePrediction)
-    
-    -- Add spacing
-    local spacer1 = Instance.new("Frame", ballTab)
-    spacer1.Size = UDim2.new(1, 0, 0, 4)
-    spacer1.BackgroundTransparency = 1
-    spacer1.LayoutOrder = #ballTab:GetChildren()
-end
-
-if playerTab then
-    ui.CreateToggle(playerTab, "Infinite Stamina", "Never run out of stamina - sprint forever", false, function(state)
-        staminaEnabled = state
-        if state then setupStamina() end
-    end)
-    
-    ui.CreateToggle(playerTab, "Speed Boost", "Double your movement speed instantly", false, toggleSpeed)
-    
-    local spacer2 = Instance.new("Frame", playerTab)
-    spacer2.Size = UDim2.new(1, 0, 0, 8)
-    spacer2.BackgroundTransparency = 1
-    spacer2.LayoutOrder = #playerTab:GetChildren()
-    
-    ui.CreateToggle(playerTab, "Ball Reach", "Extend your touch range with no cooldown", false, toggleReach)
-    
-    makeSlider(playerTab, "Reach Distance", 1, MAX_REACH, reachDist, function(v)
-        reachDist = v
-        updateReachBox()
-    end)
-    
-    makeSlider(playerTab, "Visual Opacity", 0, 100, reachVis * 100, function(v)
-        reachVis = v / 100
-        updateReachBox()
-    end)
-end
-
-if gkTab then
-    -- Create info card for GK tab
-    local infoCard = Instance.new("Frame", gkTab)
-    infoCard.Size = UDim2.new(1, -16, 0, 120)
-    infoCard.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
-    infoCard.BorderSizePixel = 0
-    infoCard.LayoutOrder = 1
-    local infoCorner = Instance.new("UICorner", infoCard)
-    infoCorner.CornerRadius = UDim.new(0, 12)
-    
-    local infoStroke = Instance.new("UIStroke", infoCard)
-    infoStroke.Color = Color3.fromRGB(100, 105, 255)
-    infoStroke.Transparency = 0.5
-    infoStroke.Thickness = 2
-    
-    local infoIcon = Instance.new("TextLabel", infoCard)
-    infoIcon.Size = UDim2.new(0, 60, 0, 60)
-    infoIcon.Position = UDim2.new(0, 20, 0.5, -30)
-    infoIcon.BackgroundTransparency = 1
-    infoIcon.Text = "🧤"
-    infoIcon.TextSize = 36
-    infoIcon.Font = Enum.Font.GothamBold
-    
-    local infoTitle = Instance.new("TextLabel", infoCard)
-    infoTitle.Size = UDim2.new(1, -100, 0, 28)
-    infoTitle.Position = UDim2.new(0, 90, 0, 20)
-    infoTitle.BackgroundTransparency = 1
-    infoTitle.Text = "Goalkeeper Features"
-    infoTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    infoTitle.Font = Enum.Font.GothamBold
-    infoTitle.TextSize = 16
-    infoTitle.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local infoDesc = Instance.new("TextLabel", infoCard)
-    infoDesc.Size = UDim2.new(1, -100, 0, 60)
-    infoDesc.Position = UDim2.new(0, 90, 0, 50)
-    infoDesc.BackgroundTransparency = 1
-    infoDesc.Text = "Advanced goalkeeper mechanics and features coming soon. Check back for updates!"
-    infoDesc.TextColor3 = Color3.fromRGB(150, 155, 200)
-    infoDesc.Font = Enum.Font.Gotham
-    infoDesc.TextSize = 13
-    infoDesc.TextXAlignment = Enum.TextXAlignment.Left
-    infoDesc.TextYAlignment = Enum.TextYAlignment.Top
-    infoDesc.TextWrapped = true
-end
-
-if settingsTab then
-    -- Create settings info
-    local settingsCard = Instance.new("Frame", settingsTab)
-    settingsCard.Size = UDim2.new(1, -16, 0, 140)
-    settingsCard.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
-    settingsCard.BorderSizePixel = 0
-    settingsCard.LayoutOrder = 1
-    local settingsCorner = Instance.new("UICorner", settingsCard)
-    settingsCorner.CornerRadius = UDim.new(0, 12)
-    
-    local settingsStroke = Instance.new("UIStroke", settingsCard)
-    settingsStroke.Color = Color3.fromRGB(30, 30, 40)
-    settingsStroke.Transparency = 0.6
-    settingsStroke.Thickness = 1
-    
-    local settingsTitle = Instance.new("TextLabel", settingsCard)
-    settingsTitle.Size = UDim2.new(1, -32, 0, 32)
-    settingsTitle.Position = UDim2.new(0, 16, 0, 16)
-    settingsTitle.BackgroundTransparency = 1
-    settingsTitle.Text = "⚙ Hub Information"
-    settingsTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
-    settingsTitle.Font = Enum.Font.GothamBold
-    settingsTitle.TextSize = 18
-    settingsTitle.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local versionLabel = Instance.new("TextLabel", settingsCard)
-    versionLabel.Size = UDim2.new(1, -32, 0, 22)
-    versionLabel.Position = UDim2.new(0, 16, 0, 54)
-    versionLabel.BackgroundTransparency = 1
-    versionLabel.Text = "Version: 2.0 Premium"
-    versionLabel.TextColor3 = Color3.fromRGB(180, 185, 220)
-    versionLabel.Font = Enum.Font.Gotham
-    versionLabel.TextSize = 13
-    versionLabel.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local statusLabel2 = Instance.new("TextLabel", settingsCard)
-    statusLabel2.Size = UDim2.new(1, -32, 0, 22)
-    statusLabel2.Position = UDim2.new(0, 16, 0, 78)
-    statusLabel2.BackgroundTransparency = 1
-    statusLabel2.Text = "Status: ✓ All Systems Operational"
-    statusLabel2.TextColor3 = Color3.fromRGB(50, 255, 100)
-    statusLabel2.Font = Enum.Font.GothamSemibold
-    statusLabel2.TextSize = 13
-    statusLabel2.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local footerLabel = Instance.new("TextLabel", settingsCard)
-    footerLabel.Size = UDim2.new(1, -32, 0, 22)
-    footerLabel.Position = UDim2.new(0, 16, 0, 104)
-    footerLabel.BackgroundTransparency = 1
-    footerLabel.Text = "Designed for peak performance"
-    footerLabel.TextColor3 = Color3.fromRGB(130, 135, 180)
-    footerLabel.Font = Enum.Font.GothamItalic
-    footerLabel.TextSize = 12
-    footerLabel.TextXAlignment = Enum.TextXAlignment.Left
-    
-    -- Add keybind button
-    local spacer3 = Instance.new("Frame", settingsTab)
-    spacer3.Size = UDim2.new(1, 0, 0, 12)
-    spacer3.BackgroundTransparency = 1
-    spacer3.LayoutOrder = #settingsTab:GetChildren()
-    
-    local keybindCard = Instance.new("Frame", settingsTab)
-    keybindCard.Size = UDim2.new(1, -16, 0, 80)
-    keybindCard.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
-    keybindCard.BorderSizePixel = 0
-    keybindCard.LayoutOrder = #settingsTab:GetChildren()
-    local keybindCorner = Instance.new("UICorner", keybindCard)
-    keybindCorner.CornerRadius = UDim.new(0, 12)
-    
-    local keybindStroke = Instance.new("UIStroke", keybindCard)
-    keybindStroke.Color = Color3.fromRGB(30, 30, 40)
-    keybindStroke.Transparency = 0.6
-    keybindStroke.Thickness = 1
-    
-    local keybindLabel = Instance.new("TextLabel", keybindCard)
-    keybindLabel.Size = UDim2.new(0.6, 0, 0, 26)
-    keybindLabel.Position = UDim2.new(0, 16, 0, 12)
-    keybindLabel.BackgroundTransparency = 1
-    keybindLabel.Text = "Toggle UI Keybind"
-    keybindLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    keybindLabel.Font = Enum.Font.GothamBold
-    keybindLabel.TextSize = 15
-    keybindLabel.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local keybindDesc = Instance.new("TextLabel", keybindCard)
-    keybindDesc.Size = UDim2.new(1, -32, 0, 20)
-    keybindDesc.Position = UDim2.new(0, 16, 0, 40)
-    keybindDesc.BackgroundTransparency = 1
-    keybindDesc.Text = "Press RIGHT CTRL to toggle the UI"
-    keybindDesc.TextColor3 = Color3.fromRGB(130, 135, 180)
-    keybindDesc.Font = Enum.Font.Gotham
-    keybindDesc.TextSize = 13
-    keybindDesc.TextXAlignment = Enum.TextXAlignment.Left
-    
-    local keybindButton = Instance.new("TextButton", keybindCard)
-    keybindButton.Size = UDim2.new(0, 100, 0, 36)
-    keybindButton.Position = UDim2.new(1, -116, 0.5, -18)
-    keybindButton.BackgroundColor3 = Color3.fromRGB(100, 105, 255)
-    keybindButton.Text = "RIGHT CTRL"
-    keybindButton.TextColor3 = Color3.fromRGB(255, 255, 255)
-    keybindButton.Font = Enum.Font.GothamBold
-    keybindButton.TextSize = 12
-    keybindButton.AutoButtonColor = false
-    keybindButton.BorderSizePixel = 0
-    local keybindBtnCorner = Instance.new("UICorner", keybindButton)
-    keybindBtnCorner.CornerRadius = UDim.new(0, 8)
-    
-    local keybindBtnStroke = Instance.new("UIStroke", keybindButton)
-    keybindBtnStroke.Color = Color3.fromRGB(120, 125, 255)
-    keybindBtnStroke.Transparency = 0.5
-    keybindBtnStroke.Thickness = 2
-end
-
--- Toggle UI with keybind
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.RightControl then
-        if ui.Root.Visible then
-            tween(ui.Root, {Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
-            for i, shadow in ipairs(ui.Shadows) do
-                tween(shadow, {BackgroundTransparency = 1}, 0.3)
-            end
-            task.wait(0.3)
-            ui.Root.Visible = false
-        else
-            ui.Root.Visible = true
-            ui.Root.Size = UDim2.new(0, 0, 0, 0)
-            ui.Root.Position = UDim2.new(0.5, 0, 0.5, 0)
-            tween(ui.Root, {Size = UDim2.new(0, 620, 0, 420)}, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-            for i, shadow in ipairs(ui.Shadows) do
-                task.spawn(function()
-                    wait(i * 0.05)
-                    tween(shadow, {BackgroundTransparency = 0.92 - (i * 0.02)}, 0.4)
-                end)
-            end
-        end
     end
-end)
 
-setupStamina()
+-- duplicate early UI setup removed; UI builds correctly after createMain returns
 
 -- Notification system
 local function showNotification(title, message, duration)
@@ -382,7 +144,7 @@ end
 
 -- Show welcome notification
 task.delay(1, function()
-    showNotification("Solaris Premium Loaded", "All features active and ready to use!", 4)
+    showNotification("Solaris Loaded", "All features active and ready to use!", 4)
 end)
     end
 
@@ -553,8 +315,8 @@ end)
 
     -- Typewriter animation
     task.spawn(function()
-        local titleText = "SOLARIS PREMIUM"
-        local subText = "Advanced • Powerful • Undetected"
+        local titleText = "SOLARIS"
+        local subText = "Undetected"
         
         for i = 1, #titleText do
             title.Text = titleText:sub(1, i)
@@ -761,7 +523,7 @@ end)
     end
 
     local tabs = {"Ball", "Player", "GK", "Settings"}
-    local icons = {"⚽", "👤", "🧤", "⚙"}
+    local icons = {">", ">", ">", ">"}
     local buttons = {}
     for i, t in ipairs(tabs) do
         buttons[t] = makeSidebarButton(t, icons[i], i)
@@ -971,6 +733,35 @@ task.spawn(function()
         end)
     end
 end)
+
+-- Toggle UI with keybind (moved here so `ui` exists)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.RightControl then
+        if ui.Root.Visible then
+            tween(ui.Root, {Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(0.5, 0, 0.5, 0)}, 0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In)
+            for i, shadow in ipairs(ui.Shadows) do
+                tween(shadow, {BackgroundTransparency = 1}, 0.3)
+            end
+            task.wait(0.3)
+            ui.Root.Visible = false
+        else
+            ui.Root.Visible = true
+            ui.Root.Size = UDim2.new(0, 0, 0, 0)
+            ui.Root.Position = UDim2.new(0.5, 0, 0.5, 0)
+            tween(ui.Root, {Size = UDim2.new(0, 620, 0, 420)}, 0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+            for i, shadow in ipairs(ui.Shadows) do
+                task.spawn(function()
+                    wait(i * 0.05)
+                    tween(shadow, {BackgroundTransparency = 0.92 - (i * 0.02)}, 0.4)
+                end)
+            end
+        end
+    end
+end)
+
+setupStamina()
 
 local function switchTo(tabName)
     if not ui.TabFrames[tabName] then return end
