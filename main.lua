@@ -1,136 +1,197 @@
--- Load Wind UI
-local Wind = loadstring(game:HttpGet("https://raw.githubusercontent.com/SeventyM/Wind/main/source.lua"))()
+-- // Load Rayfield UI
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local win = Wind:CreateWindow("Solaris Premium", Vector2.new(600, 400), Enum.KeyCode.RightControl)
-local tabBall = win:CreateTab("Ball")
-local tabPlayer = win:CreateTab("Player")
-local tabGK = win:CreateTab("GK")
-local tabSettings = win:CreateTab("Settings")
+local Window = Rayfield:CreateWindow({
+    Name = "⚛️ Astatine Premium",
+    LoadingTitle = "Initializing Astatine...",
+    LoadingSubtitle = "Rayfield Interface",
+    ConfigurationSaving = {Enabled = false},
+    Discord = {Enabled = false}
+})
 
+-- Tabs
+local tabPlayer = Window:CreateTab("🏃 Player")
+local tabBall = Window:CreateTab("⚽ Ball Controls")
+local tabGK = Window:CreateTab("🧤 Goalkeeper")
+local tabSettings = Window:CreateTab("⚙️ Settings")
+
+-- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
--- BALL PREDICTOR (if available)
-local BallPredictor = nil
-do
-    local ok, content = pcall(function()
-        return readfile and readfile("c:\\Users\\afons\\OneDrive\\Desktop\\Solaris hub (off brand version of biggie)\\ball_predictor.lua")
-    end)
-    if ok and content then
-        local fn, err = loadstring(content)
-        if fn then
-            local suc, mod = pcall(fn)
-            if suc and type(mod) == "table" then
-                BallPredictor = mod
+---------------------------------------------------------------------
+-- Sidebar UI (fake sidebar switching tabs)
+---------------------------------------------------------------------
+local sidebarFrame = Instance.new("Frame")
+sidebarFrame.Size = UDim2.new(0, 150, 1, 0)
+sidebarFrame.Position = UDim2.new(0, 0, 0, 0)
+sidebarFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+sidebarFrame.BorderSizePixel = 0
+sidebarFrame.Parent = Window.MainFrame
+
+local function createSidebarButton(name, tab, posY)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 40)
+    btn.Position = UDim2.new(0, 5, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+    btn.BorderSizePixel = 0
+    btn.Text = name
+    btn.TextScaled = true
+    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
+    btn.Parent = sidebarFrame
+    btn.MouseButton1Click:Connect(function()
+        Window:SelectTab(tab)
+        -- Highlight active button
+        for _, child in pairs(sidebarFrame:GetChildren()) do
+            if child:IsA("TextButton") then
+                child.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
             end
         end
-    end
+        btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+    end)
+    return btn
 end
 
-if BallPredictor then
-    Wind:Notify({Title = "Prediction", Description = "Ball predictor loaded!"})
-else
-    Wind:Notify({Title = "Prediction", Description = "Ball predictor NOT found, disabling! (All other features WORK)"})
-end
+createSidebarButton("🏃 Player", tabPlayer, 20)
+createSidebarButton("⚽ Ball Controls", tabBall, 70)
+createSidebarButton("🧤 Goalkeeper", tabGK, 120)
+createSidebarButton("⚙️ Settings", tabSettings, 170)
 
--- INFINITE STAMINA
+---------------------------------------------------------------------
+-- PLAYER TAB
+---------------------------------------------------------------------
+-- Infinite Stamina
 local staminaEnabled = false
-tabPlayer:CreateToggle("Infinite Stamina", staminaEnabled, function(v)
-    staminaEnabled = v
-    local function doStam()
-        local ok, stamina = pcall(function()
-            return LocalPlayer:WaitForChild("PlayerScripts", 5):WaitForChild("controllers", 5):WaitForChild("movementController", 5):WaitForChild("stamina", 5)
-        end)
-        if ok and stamina then
-            RunService.Heartbeat:Connect(function()
-                if staminaEnabled then stamina.Value = 100 end
+tabPlayer:CreateToggle({
+    Name = "Infinite Stamina",
+    CurrentValue = false,
+    Flag = "StaminaToggle",
+    Callback = function(v)
+        staminaEnabled = v
+        Rayfield:Notify({Title = "Player", Content = v and "🟢 Infinite stamina enabled" or "🔴 Infinite stamina disabled"})
+        task.spawn(function()
+            local ok, stamina = pcall(function()
+                return LocalPlayer:WaitForChild("PlayerScripts", 5)
+                    :WaitForChild("controllers", 5)
+                    :WaitForChild("movementController", 5)
+                    :WaitForChild("stamina", 5)
             end)
+            if ok and stamina then
+                RunService.Heartbeat:Connect(function()
+                    if staminaEnabled then
+                        stamina.Value = 100
+                    end
+                end)
+            end
+        end)
+    end
+})
+
+-- Speed Boost
+local speedEnabled = false
+local speedMultiplier = 2
+local defaultSpeed = 16
+
+tabPlayer:CreateSlider({
+    Name = "Speed Multiplier",
+    Range = {1, 3},
+    Increment = 0.5,
+    CurrentValue = 2,
+    Flag = "SpeedMult",
+    Callback = function(val)
+        speedMultiplier = val
+    end
+})
+
+tabPlayer:CreateToggle({
+    Name = "Speed Boost",
+    CurrentValue = false,
+    Flag = "SpeedToggle",
+    Callback = function(v)
+        speedEnabled = v
+        Rayfield:Notify({Title = "Player", Content = v and "🏃 Speed boost enabled" or "🏃 Speed boost disabled"})
+        RunService.Heartbeat:Connect(function()
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.WalkSpeed = speedEnabled and (defaultSpeed * speedMultiplier) or defaultSpeed
+            end
+        end)
+    end
+})
+
+---------------------------------------------------------------------
+-- BALL CONTROLS TAB
+---------------------------------------------------------------------
+local reachOn = false
+local reachDist = 5
+local maxReach = 8
+
+-- Reach bypass
+do
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
+            hookfunction(v.overlapCheck, function() return true end)
+            hookfunction(v.gkCheck, function() return true end)
         end
     end
-    doStam()
-end)
+end
 
--- SPEED BOOST
-local speedEnabled = false
-local originalSpeed = 16
-tabPlayer:CreateToggle("Speed Boost", speedEnabled, function(v)
-    speedEnabled = v
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum and speedEnabled then
-        originalSpeed = hum.WalkSpeed
-        hum.WalkSpeed = originalSpeed * 2
-    elseif hum then
-        hum.WalkSpeed = originalSpeed
+tabBall:CreateSlider({
+    Name = "Reach Distance",
+    Range = {5, maxReach},
+    Increment = 0.5,
+    CurrentValue = 5,
+    Flag = "ReachDist",
+    Callback = function(val)
+        reachDist = val
     end
-end)
+})
 
--- REACH
-local reachEnabled = false
-local reachDist = 12
-local MAXREACH = 50
-tabBall:CreateSlider("Reach Distance", 12, MAXREACH, reachDist, function(val)
-    reachDist = val
-end)
-tabBall:CreateToggle("Reach Enabled", reachEnabled, function(v)
-    reachEnabled = v
-    local reachBox, reachConn
-    local function fireTouch(ball, limb)
-        pcall(function()
-            firetouchinterest(ball, limb, 0)
-            firetouchinterest(ball, limb, 1)
-        end)
+tabBall:CreateToggle({
+    Name = "Enable Reach",
+    CurrentValue = false,
+    Flag = "ReachToggle",
+    Callback = function(v)
+        reachOn = v
+        Rayfield:Notify({Title = "Reach", Content = v and "🟢 Reach enabled" or "🔴 Reach disabled"})
     end
-    if reachEnabled then
-        reachBox = Instance.new("Part", workspace)
-        reachBox.Name = "ReachBox"
-        reachBox.Anchored = true
-        reachBox.CanCollide = false
-        reachBox.Transparency = 0.5
-        reachBox.Size = Vector3.new(reachDist*2, reachDist*2, reachDist*2)
-        reachBox.Color = Color3.fromRGB(100,105,255)
-        reachBox.Material = Enum.Material.ForceField
-        reachConn = RunService.Heartbeat:Connect(function()
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if root and reachBox then reachBox.Position = root.Position end
-            if not root then return end
+})
+
+local function fireTouch(ball, limb)
+    firetouchinterest(ball, limb, 0)
+    task.wait(0.03)
+    firetouchinterest(ball, limb, 1)
+end
+
+RunService.Heartbeat:Connect(function()
+    if reachOn then
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
             for _, ball in ipairs(workspace:GetDescendants()) do
                 if ball:IsA("Part") and ball:FindFirstChild("network") then
-                    local dist = (ball.Position - root.Position).Magnitude
-                    if dist <= reachDist then
+                    if (ball.Position - root.Position).Magnitude <= reachDist then
                         for _, limb in pairs(char:GetDescendants()) do
-                            if limb:IsA("BasePart") and (limb.Name:find("Arm") or limb.Name:find("Leg") or limb.Name:find("Torso")) then
-                                fireTouch(ball, limb)
+                            if limb:IsA("BasePart") then
+                                task.spawn(fireTouch, ball, limb)
                             end
                         end
                     end
                 end
             end
-        end)
-    else
-        if reachBox then reachBox:Destroy() end
-        if reachConn then reachConn:Disconnect() end
+        end
     end
 end)
 
--- BALL PREDICTION
-tabBall:CreateToggle("Prediction", false, function(pred_enabled)
-    if not BallPredictor then
-        Wind:Notify({Title = "Prediction", Description = "Prediction cannot run! No ball_predictor.lua found."})
-        return
+---------------------------------------------------------------------
+-- SETTINGS TAB
+---------------------------------------------------------------------
+tabSettings:CreateButton({
+    Name = "Unload Script",
+    Callback = function()
+        Rayfield:Notify({Title = "System", Content = "🛑 Astatine Premium unloaded."})
+        Rayfield:Destroy()
     end
-    if pred_enabled then
-        Wind:Notify({Title = "Prediction", Description = "Prediction enabled (your BallPredictor logic goes here)"})
-        -- Use BallPredictor logic here for real predictions!
-    else
-        Wind:Notify({Title = "Prediction", Description = "Prediction disabled"})
-    end
-end)
-
--- GK/Settings Tabs (stub content, add logic if needed)
-tabGK:CreateLabel("GK tab stub, add features if wanted.")
-tabSettings:CreateLabel("Settings tab stub, customize as you wish.")
-
--- Everything runs, returns NO nil, notifies you if BallPredictor is missing.
+})
