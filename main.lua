@@ -2,18 +2,18 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "⚛️ Astatine Premium",
-    LoadingTitle = "Initializing Astatine...",
-    LoadingSubtitle = "Rayfield Interface",
+    Name = "Astatine Paid",
+    LoadingTitle = "booting Astatine...",
+    LoadingSubtitle = "Creaming..",
     ConfigurationSaving = {Enabled = false},
     Discord = {Enabled = false}
 })
 
 -- Tabs
-local tabPlayer = Window:CreateTab("🏃 Player")
-local tabBall = Window:CreateTab("⚽ Ball Controls")
-local tabGK = Window:CreateTab("🧤 Goalkeeper")
-local tabSettings = Window:CreateTab("⚙️ Settings")
+local tabPlayer = Window:CreateTab("Player")
+local tabBall = Window:CreateTab("Ball Controls")
+local tabGK = Window:CreateTab("Goalkeeper")
+local tabSettings = Window:CreateTab("Settings")
 
 -- Services
 local Players = game:GetService("Players")
