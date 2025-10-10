@@ -9,7 +9,8 @@ local Window = Rayfield:CreateWindow({
 
 local tabPlayer = Window:CreateTab("Player")
 local tabBall = Window:CreateTab("Ball Controls")
-local tabGK = Window:CreateTab("Gk")
+local tabOP = Window:CreateTab("OP")
+local tabGK = Window:CreateTab("Goalkeeper")
 local tabSettings = Window:CreateTab("Settings")
 
 local Players = game:GetService("Players")
@@ -45,11 +46,13 @@ local function createSidebarButton(name, tab, posY)
     return btn
 end
 
-createSidebarButton("Player", tabPlayer, 20)
-createSidebarButton("Ball Controls", tabBall, 70)
-createSidebarButton("Goalkeeper", tabGK, 120)
-createSidebarButton("Settings", tabSettings, 170)
+createSidebarButton("🏃 Player", tabPlayer, 20)
+createSidebarButton("⚽ Ball Controls", tabBall, 70)
+createSidebarButton("💀 OP", tabOP, 120)
+createSidebarButton("🧤 Goalkeeper", tabGK, 170)
+createSidebarButton("⚙️ Settings", tabSettings, 220)
 
+-- PLAYER TAB
 local staminaEnabled = false
 tabPlayer:CreateToggle({
     Name = "Infinite Stamina",
@@ -58,31 +61,33 @@ tabPlayer:CreateToggle({
     Callback = function(v)
         staminaEnabled = v
         Rayfield:Notify({Title = "Player", Content = v and "🟢 Infinite stamina enabled" or "🔴 Infinite stamina disabled"})
-        task.spawn(function()
-            local ok, stamina = pcall(function()
-                return LocalPlayer:WaitForChild("PlayerScripts", 5)
-                    :WaitForChild("controllers", 5)
-                    :WaitForChild("movementController", 5)
-                    :WaitForChild("stamina", 5)
-            end)
-            if ok and stamina then
-                RunService.Heartbeat:Connect(function()
-                    if staminaEnabled then
-                        stamina.Value = 100
-                    end
-                end)
-            end
-        end)
     end
 })
 
+local staminaConnection
+task.spawn(function()
+    local ok, stamina = pcall(function()
+        return LocalPlayer:WaitForChild("PlayerScripts", 5)
+            :WaitForChild("controllers", 5)
+            :WaitForChild("movementController", 5)
+            :WaitForChild("stamina", 5)
+    end)
+    if ok and stamina then
+        staminaConnection = RunService.Heartbeat:Connect(function()
+            if staminaEnabled then
+                stamina.Value = 100
+            end
+        end)
+    end
+end)
+
 local speedEnabled = false
 local speedMultiplier = 2
-local defaultSpeed = 16
+local originalSpeed = nil
 
 tabPlayer:CreateSlider({
     Name = "Speed Multiplier",
-    Range = {1, 3},
+    Range = {1, 5},
     Increment = 0.5,
     CurrentValue = 2,
     Flag = "SpeedMult",
@@ -101,17 +106,26 @@ tabPlayer:CreateToggle({
     end
 })
 
-RunService.Heartbeat:Connect(function()
+local speedConnection = RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
-        hum.WalkSpeed = speedEnabled and (defaultSpeed * speedMultiplier) or defaultSpeed
+        if not originalSpeed then
+            originalSpeed = hum.WalkSpeed
+        end
+        if speedEnabled then
+            hum.WalkSpeed = originalSpeed * speedMultiplier
+        else
+            hum.WalkSpeed = originalSpeed
+        end
     end
 end)
 
+-- BALL CONTROLS TAB
 local reachOn = false
 local reachDist = 5
-local maxReach = 20
+local maxReach = 50
 
 do
     for _, v in ipairs(getgc(true)) do
@@ -125,11 +139,12 @@ end
 tabBall:CreateSlider({
     Name = "Reach Distance",
     Range = {5, maxReach},
-    Increment = 0.5,
+    Increment = 1,
     CurrentValue = 5,
     Flag = "ReachDist",
     Callback = function(val)
-        reachDist = math.clamp(val, 5, maxReach)
+        reachDist = val
+        Rayfield:Notify({Title = "Reach", Content = "📏 Reach set to " .. tostring(val) .. " studs"})
     end
 })
 
@@ -144,25 +159,27 @@ tabBall:CreateToggle({
 })
 
 local function fireTouch(ball, limb)
-    firetouchinterest(ball, limb, 0)
-    task.wait(0.02)
-    firetouchinterest(ball, limb, 1)
+    pcall(function()
+        firetouchinterest(ball, limb, 0)
+        task.wait()
+        firetouchinterest(ball, limb, 1)
+    end)
 end
 
-RunService.Heartbeat:Connect(function()
-    if reachOn then
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if root then
-            for _, ball in ipairs(workspace:GetDescendants()) do
-                if ball:IsA("Part") and ball:FindFirstChild("network") then
-                    local dist = (ball.Position - root.Position).Magnitude
-                    if dist <= reachDist then
-                        for _, limb in pairs(char:GetDescendants()) do
-                            if limb:IsA("BasePart") then
-                                task.spawn(fireTouch, ball, limb)
-                            end
-                        end
+local reachConnection = RunService.Heartbeat:Connect(function()
+    if not reachOn then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    for _, ball in ipairs(workspace:GetDescendants()) do
+        if ball:IsA("Part") and ball:FindFirstChild("network") then
+            local dist = (ball.Position - root.Position).Magnitude
+            if dist <= reachDist then
+                for _, limb in pairs(char:GetDescendants()) do
+                    if limb:IsA("BasePart") and limb.Name ~= "HumanoidRootPart" then
+                        fireTouch(ball, limb)
                     end
                 end
             end
@@ -172,8 +189,8 @@ end)
 
 local autoGoal = false
 local goalPower = 100
+local airPower = 100
 local shootCooldown = false
-local maxAirPower = 300
 
 tabBall:CreateToggle({
     Name = "Auto Goal",
@@ -187,7 +204,7 @@ tabBall:CreateToggle({
 
 tabBall:CreateSlider({
     Name = "Goal Power (Ground)",
-    Range = {50, 200},
+    Range = {50, 300},
     Increment = 10,
     CurrentValue = 100,
     Flag = "GoalPower",
@@ -197,47 +214,53 @@ tabBall:CreateSlider({
 })
 
 tabBall:CreateSlider({
-    Name = "Air Ball Max Power",
-    Range = {1, maxAirPower},
-    Increment = 5,
+    Name = "Air Ball Power",
+    Range = {50, 500},
+    Increment = 10,
     CurrentValue = 100,
     Flag = "AirPower",
     Callback = function(val)
-        maxAirPower = val
+        airPower = val
     end
 })
 
 local function shootBall(ball, targetPos, power)
     if shootCooldown then return end
     shootCooldown = true
-    local bodyVelocity = Instance.new("BodyVelocity")
-    bodyVelocity.MaxForce = Vector3.new(1e5,1e5,1e5)
-    bodyVelocity.Velocity = (targetPos - ball.Position).Unit * power
-    bodyVelocity.Parent = ball
-    game.Debris:AddItem(bodyVelocity,0.3)
-    task.wait(0.6)
+    
+    pcall(function()
+        local bv = Instance.new("BodyVelocity")
+        bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        bv.Velocity = (targetPos - ball.Position).Unit * power
+        bv.Parent = ball
+        game:GetService("Debris"):AddItem(bv, 0.1)
+        
+        ball.AssemblyLinearVelocity = (targetPos - ball.Position).Unit * power
+    end)
+    
+    task.wait(0.5)
     shootCooldown = false
 end
 
-RunService.Heartbeat:Connect(function()
-    if autoGoal then
-        local char = LocalPlayer.Character
-        local root = char and char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
+local autoGoalConnection = RunService.Heartbeat:Connect(function()
+    if not autoGoal then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
 
-        for _, ball in ipairs(workspace:GetDescendants()) do
-            if ball:IsA("Part") and ball:FindFirstChild("network") then
-                local dist = (ball.Position - root.Position).Magnitude
-                if dist <= reachDist then
-                    for _, goal in pairs(workspace:GetDescendants()) do
-                        if goal:IsA("Model") and goal.Name:lower():find("goal") then
-                            local goalPart = goal:FindFirstChildWhichIsA("BasePart")
-                            if goalPart then
-                                local ballPower = math.clamp((dist / reachDist) * maxAirPower, 1, maxAirPower)
-                                local finalPower = ball.Position.Y > 3 and ballPower or goalPower
-                                shootBall(ball, goalPart.Position, finalPower)
-                                break
-                            end
+    for _, ball in ipairs(workspace:GetDescendants()) do
+        if ball:IsA("Part") and ball:FindFirstChild("network") then
+            local dist = (ball.Position - root.Position).Magnitude
+            if dist <= reachDist then
+                for _, goal in pairs(workspace:GetDescendants()) do
+                    if goal:IsA("Model") and goal.Name:lower():find("goal") then
+                        local goalPart = goal:FindFirstChildWhichIsA("BasePart")
+                        if goalPart then
+                            local isAirBall = ball.Position.Y > 5
+                            local power = isAirBall and airPower or goalPower
+                            shootBall(ball, goalPart.Position, power)
+                            break
                         end
                     end
                 end
@@ -246,10 +269,97 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- OP TAB
+local ballsBroken = false
+
+tabOP:CreateButton({
+    Name = "Break React (Ball Frozen)",
+    Callback = function()
+        for _, ball in ipairs(workspace:GetDescendants()) do
+            if ball:IsA("Part") and ball:FindFirstChild("network") then
+                pcall(function()
+                    ball.Anchored = true
+                    ball.CanCollide = false
+                    local network = ball:FindFirstChild("network")
+                    if network then
+                        network:Destroy()
+                    end
+                end)
+            end
+        end
+        ballsBroken = true
+        Rayfield:Notify({Title = "OP", Content = "💀 Ball react broken! Nobody can touch it."})
+    end
+})
+
+tabOP:CreateButton({
+    Name = "Fix React (Ball Normal)",
+    Callback = function()
+        for _, ball in ipairs(workspace:GetDescendants()) do
+            if ball:IsA("Part") and ball.Name:lower():find("ball") then
+                pcall(function()
+                    ball.Anchored = false
+                    ball.CanCollide = true
+                end)
+            end
+        end
+        ballsBroken = false
+        Rayfield:Notify({Title = "OP", Content = "✅ Ball react fixed! Everyone can touch it."})
+    end
+})
+
+tabOP:CreateButton({
+    Name = "Ragdoll All Players",
+    Callback = function()
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                pcall(function()
+                    local char = player.Character
+                    if char then
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        if hum then
+                            hum:ChangeState(Enum.HumanoidStateType.Ragdoll)
+                            hum.PlatformStand = true
+                        end
+                    end
+                end)
+            end
+        end
+        Rayfield:Notify({Title = "OP", Content = "💀 All players ragdolled!"})
+    end
+})
+
+tabOP:CreateButton({
+    Name = "Kill All Players",
+    Callback = function()
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                pcall(function()
+                    local char = player.Character
+                    if char then
+                        local hum = char:FindFirstChildOfClass("Humanoid")
+                        if hum then
+                            hum.Health = 0
+                        end
+                    end
+                end)
+            end
+        end
+        Rayfield:Notify({Title = "OP", Content = "💀 All players killed!"})
+    end
+})
+
+-- SETTINGS TAB
 tabSettings:CreateButton({
     Name = "Unload Script",
     Callback = function()
+        if staminaConnection then staminaConnection:Disconnect() end
+        if speedConnection then speedConnection:Disconnect() end
+        if reachConnection then reachConnection:Disconnect() end
+        if autoGoalConnection then autoGoalConnection:Disconnect() end
+        
         Rayfield:Notify({Title = "System", Content = "🛑 Astatine Premium unloaded."})
+        task.wait(1)
         Rayfield:Destroy()
     end
 })
