@@ -124,9 +124,11 @@ end)
 
 -- BALL CONTROLS TAB
 local reachOn = false
-local reachDist = 5
+local visualOn = false
+local reachDist = 8
 local maxReach = 50
 
+-- Bypass checks
 do
     for _, v in ipairs(getgc(true)) do
         if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
@@ -136,11 +138,67 @@ do
     end
 end
 
+-- Create 12 edges for box visualization
+local edges = {}
+for i=1,12 do
+    local part = Instance.new("Part")
+    part.Anchored = true
+    part.CanCollide = false
+    part.Material = Enum.Material.Neon
+    part.Color = Color3.new(1,1,1)
+    part.Size = Vector3.new(0.2,0.2,0.2)
+    part.Parent = workspace
+    edges[i] = part
+end
+
+-- Pulsing
+local pulse = 0
+RunService.RenderStepped:Connect(function(dt)
+    pulse = pulse + dt * 2
+end)
+
+-- Update visuals
+RunService.RenderStepped:Connect(function()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("Torso")
+    if not root then return end
+
+    if reachOn and visualOn then
+        local s = reachDist
+        local pulseEffect = math.abs(math.sin(pulse)) * 0.2
+        local positions = {
+            -- bottom square
+            Vector3.new(-s,-s,-s), Vector3.new(s,-s,-s),
+            Vector3.new(s,-s,s), Vector3.new(-s,-s,s),
+            -- top square
+            Vector3.new(-s,s,-s), Vector3.new(s,s,-s),
+            Vector3.new(s,s,s), Vector3.new(-s,s,s)
+        }
+        local lines = {
+            {1,2},{2,3},{3,4},{4,1}, -- bottom
+            {5,6},{6,7},{7,8},{8,5}, -- top
+            {1,5},{2,6},{3,7},{4,8}  -- verticals
+        }
+        for i,line in ipairs(lines) do
+            local p1 = root.Position + positions[line[1]]
+            local p2 = root.Position + positions[line[2]]
+            edges[i].CFrame = CFrame.new((p1+p2)/2, p2)
+            edges[i].Size = Vector3.new(0.1,0.1,(p2-p1).Magnitude)
+            edges[i].Transparency = 0.6 - pulseEffect/2
+        end
+    else
+        for _, part in ipairs(edges) do
+            part.Transparency = 1
+        end
+    end
+end)
+
 tabBall:CreateSlider({
     Name = "Reach Distance",
-    Range = {5, maxReach},
+    Range = {1, maxReach},
     Increment = 1,
-    CurrentValue = 5,
+    CurrentValue = 8,
     Flag = "ReachDist",
     Callback = function(val)
         reachDist = val
@@ -158,29 +216,36 @@ tabBall:CreateToggle({
     end
 })
 
+tabBall:CreateToggle({
+    Name = "Reach Visuals",
+    CurrentValue = false,
+    Flag = "ReachVisuals",
+    Callback = function(v)
+        visualOn = v
+        Rayfield:Notify({Title = "Reach", Content = v and "👁️ Visuals enabled" or "👁️ Visuals disabled"})
+    end
+})
+
 local function fireTouch(ball, limb)
-    pcall(function()
-        firetouchinterest(ball, limb, 0)
-        task.wait()
-        firetouchinterest(ball, limb, 1)
-    end)
+    firetouchinterest(ball, limb, 0)
+    firetouchinterest(ball, limb, 1)
 end
 
-local reachConnection = RunService.Heartbeat:Connect(function()
-    if not reachOn then return end
+-- Optimized reach with throttling
+local lastTick = 0
+local reachConnection = RunService.Heartbeat:Connect(function(dt)
+    if not reachOn or tick() - lastTick < 0.05 then return end
+    lastTick = tick()
+
     local char = LocalPlayer.Character
-    if not char then return end
-    local root = char:FindFirstChild("HumanoidRootPart")
+    local root = char and char:FindFirstChild("HumanoidRootPart")
     if not root then return end
-    
+
     for _, ball in ipairs(workspace:GetDescendants()) do
-        if ball:IsA("Part") and ball:FindFirstChild("network") then
-            local dist = (ball.Position - root.Position).Magnitude
-            if dist <= reachDist then
-                for _, limb in pairs(char:GetDescendants()) do
-                    if limb:IsA("BasePart") and limb.Name ~= "HumanoidRootPart" then
-                        fireTouch(ball, limb)
-                    end
+        if ball:IsA("Part") and ball:FindFirstChild("network") and (ball.Position - root.Position).Magnitude <= reachDist then
+            for _, limb in pairs(char:GetDescendants()) do
+                if limb:IsA("BasePart") then
+                    task.spawn(fireTouch, ball, limb)
                 end
             end
         end
@@ -357,6 +422,11 @@ tabSettings:CreateButton({
         if speedConnection then speedConnection:Disconnect() end
         if reachConnection then reachConnection:Disconnect() end
         if autoGoalConnection then autoGoalConnection:Disconnect() end
+        
+        -- Clean up visual edges
+        for _, edge in ipairs(edges) do
+            edge:Destroy()
+        end
         
         Rayfield:Notify({Title = "System", Content = "🛑 Astatine Premium unloaded."})
         task.wait(1)
