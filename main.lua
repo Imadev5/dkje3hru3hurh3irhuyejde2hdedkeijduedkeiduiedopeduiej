@@ -25,224 +25,99 @@ local tabOP = Window:CreateTab("OP Features")
 local tabGK = Window:CreateTab("Goalkeeper")
 local tabSettings = Window:CreateTab("Settings")
 
--- Advanced Variables
-local reachSystem = {
-    enabled = false,
-    distance = 8,
-    maxDistance = 100,
-    mode = "Smart",
-    bypassLevel = 3,
-    visualizer = true,
-    autoAdjust = true,
-    prediction = true,
-    multiTouch = true,
-    smartDelay = true,
-    lastTouch = 0,
-    touchCount = 0,
-    ballHistory = {},
-    connections = {}
-}
+-- REACH SYSTEM (Using the simpler, more effective version)
+local reachOn = false
+local reachDist = 5
+local maxReach = 8
+local reachConnection = nil
 
--- ENHANCED BYPASSER SYSTEM
-local bypassMethods = {
-    -- Method 1: Hook overlapCheck and gkCheck functions
-    hookOverlapChecks = function()
-        for _, v in ipairs(getgc(true)) do
-            if type(v) == "table" then
-                if rawget(v, "overlapCheck") then
-                    hookfunction(v.overlapCheck, function(...) return true end)
-                end
-                if rawget(v, "gkCheck") then
-                    hookfunction(v.gkCheck, function(...) return true end)
-                end
-                if rawget(v, "ballCheck") then
-                    hookfunction(v.ballCheck, function(...) return true end)
-                end
-                if rawget(v, "distanceCheck") then
-                    hookfunction(v.distanceCheck, function(...) return true end)
-                end
-                if rawget(v, "touchCheck") then
-                    hookfunction(v.touchCheck, function(...) return true end)
-                end
-                if rawget(v, "validateTouch") then
-                    hookfunction(v.validateTouch, function(...) return true end)
-                end
-            end
+-- Bypass Reach (overlapCheck + gkCheck hook)
+local function bypassReach()
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
+            hookfunction(v.overlapCheck, function() return true end)
+            hookfunction(v.gkCheck, function() return true end)
         end
-    end,
+    end
+end
+
+-- Initialize bypass
+bypassReach()
+
+-- Reach mechanics
+local function fireTouch(ball, limb)
+    firetouchinterest(ball, limb, 0)
+    task.wait(0.03)
+    firetouchinterest(ball, limb, 1)
+end
+
+local function startReach()
+    if reachConnection then
+        reachConnection:Disconnect()
+        reachConnection = nil
+    end
     
-    -- Method 2: Advanced network bypassing
-    bypassNetworkChecks = function()
-        local success = pcall(function()
-            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                if remote:IsA("RemoteEvent") or remote:IsA("RemoteFunction") then
-                    if remote.Name:lower():find("ball") or remote.Name:lower():find("touch") or remote.Name:lower():find("kick") then
-                        local oldFireServer = remote.FireServer
-                        remote.FireServer = function(self, ...)
-                            local args = {...}
-                            -- Modify distance parameters in network calls
-                            if #args > 0 and type(args[1]) == "table" and args[1].distance then
-                                args[1].distance = 0  -- Make distance checks always pass
+    reachConnection = RunService.Heartbeat:Connect(function()
+        if reachOn then
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                for _, ball in ipairs(workspace:GetDescendants()) do
+                    if ball:IsA("Part") and ball:FindFirstChild("network") then
+                        if (ball.Position - root.Position).Magnitude <= reachDist then
+                            for _, limb in pairs(char:GetDescendants()) do
+                                if limb:IsA("BasePart") then
+                                    task.spawn(fireTouch, ball, limb)
+                                end
                             end
-                            return oldFireServer(self, unpack(args))
                         end
                     end
                 end
             end
-        end)
-        return success
-    end,
-    
-    -- Method 3: Memory scanning for anti-cheat
-    scanMemory = function()
-        local success = pcall(function()
-            for _, obj in pairs(getgc(true)) do
-                if type(obj) == "function" then
-                    local info = debug.getinfo(obj)
-                    if info and info.source and (
-                        info.source:find("anticheat") or 
-                        info.source:find("detection") or
-                        info.source:find("security") or
-                        info.source:find("validate") or
-                        info.source:find("check")
-                    ) then
-                        hookfunction(obj, function() return end)
-                    end
-                end
-            end
-        end)
-        return success
-    end,
-    
-    -- Method 4: Direct script manipulation
-    manipulateScripts = function()
-        local success = pcall(function()
-            for _, script in pairs(workspace:GetDescendants()) do
-                if script:IsA("Script") or script:IsA("LocalScript") then
-                    if script.Name:lower():find("ball") or script.Name:lower():find("kick") or script.Name:lower():find("touch") then
-                        script.Disabled = true
-                        task.wait(0.1)
-                        script.Disabled = false
-                    end
-                end
-            end
-        end)
-        return success
-    end,
-    
-    -- Method 5: Constant value manipulation
-    manipulateConstants = function()
-        local success = pcall(function()
-            for _, v in ipairs(getgc(true)) do
-                if type(v) == "table" then
-                    if rawget(v, "MAX_KICK_DISTANCE") then
-                        v.MAX_KICK_DISTANCE = 1000
-                    end
-                    if rawget(v, "TOUCH_DISTANCE") then
-                        v.TOUCH_DISTANCE = 1000
-                    end
-                    if rawget(v, "KICK_RANGE") then
-                        v.KICK_RANGE = 1000
-                    end
-                end
-            end
-        end)
-        return success
-    end
-}
+        end
+    end)
+end
 
--- Initialize all bypass methods
-task.spawn(function()
-    bypassMethods.hookOverlapChecks()
-    bypassMethods.bypassNetworkChecks()
-    bypassMethods.scanMemory()
-    bypassMethods.manipulateScripts()
-    bypassMethods.manipulateConstants()
-end)
+local function stopReach()
+    if reachConnection then
+        reachConnection:Disconnect()
+        reachConnection = nil
+    end
+end
 
 -- ADVANCED REACH TAB
-tabReach:CreateDropdown({
-    Name = "Reach Mode",
-    Options = {"Smart", "Aggressive", "Stealth", "Prediction", "Hybrid"},
-    CurrentOption = "Smart",
-    Flag = "ReachMode",
-    Callback = function(option)
-        reachSystem.mode = option
-        Rayfield:Notify({Title = "Reach System", Content = "Mode set to " .. option})
+tabReach:CreateToggle({
+    Name = "Enable Reach",
+    CurrentValue = false,
+    Flag = "ReachEnabled",
+    Callback = function(v)
+        reachOn = v
+        if v then
+            startReach()
+            Rayfield:Notify({Title = "Reach System", Content = "Reach enabled"})
+        else
+            stopReach()
+            Rayfield:Notify({Title = "Reach System", Content = "Reach disabled"})
+        end
     end
 })
 
 tabReach:CreateSlider({
     Name = "Reach Distance",
-    Range = {3, reachSystem.maxDistance},
+    Range = {3, maxReach},
     Increment = 0.5,
-    CurrentValue = 8,
+    CurrentValue = 5,
     Flag = "ReachDistance",
     Callback = function(val)
-        reachSystem.distance = val
+        reachDist = val
     end
 })
 
-tabReach:CreateSlider({
-    Name = "Bypass Level",
-    Range = {1, 5},
-    Increment = 1,
-    CurrentValue = 3,
-    Flag = "BypassLevel",
-    Callback = function(val)
-        reachSystem.bypassLevel = val
-        Rayfield:Notify({Title = "Bypass", Content = "Bypass level: " .. val})
-    end
-})
-
-tabReach:CreateToggle({
-    Name = "Enable Advanced Reach",
-    CurrentValue = false,
-    Flag = "AdvancedReach",
-    Callback = function(v)
-        reachSystem.enabled = v
-        if v then
-            startAdvancedReach()
-        else
-            stopAdvancedReach()
-        end
-        Rayfield:Notify({Title = "Advanced Reach", Content = v and "Advanced reach enabled" or "Advanced reach disabled"})
-    end
-})
-
-tabReach:CreateToggle({
-    Name = "Ball Prediction",
-    CurrentValue = true,
-    Flag = "BallPrediction",
-    Callback = function(v)
-        reachSystem.prediction = v
-    end
-})
-
-tabReach:CreateToggle({
-    Name = "Multi-Touch System",
-    CurrentValue = true,
-    Flag = "MultiTouch",
-    Callback = function(v)
-        reachSystem.multiTouch = v
-    end
-})
-
-tabReach:CreateToggle({
-    Name = "Smart Delay",
-    CurrentValue = true,
-    Flag = "SmartDelay",
-    Callback = function(v)
-        reachSystem.smartDelay = v
-    end
-})
-
-tabReach:CreateToggle({
-    Name = "Visual Reach Box",
-    CurrentValue = true,
-    Flag = "VisualReach",
-    Callback = function(v)
-        reachSystem.visualizer = v
+tabReach:CreateButton({
+    Name = "Refresh Bypass",
+    Callback = function()
+        bypassReach()
+        Rayfield:Notify({Title = "Reach System", Content = "Bypass refreshed"})
     end
 })
 
@@ -375,306 +250,6 @@ local playerConnection = RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ADVANCED REACH SYSTEM FUNCTIONS
-local visualParts = {}
-local reachConnections = {}
-
--- Create advanced visualizer
-local function createAdvancedVisualizer()
-    -- Clear existing parts
-    for _, part in pairs(visualParts) do
-        if part and part.Parent then
-            part:Destroy()
-        end
-    end
-    visualParts = {}
-    
-    -- Create sphere visualizer
-    local sphere = Instance.new("Part")
-    sphere.Name = "ReachSphere"
-    sphere.Anchored = true
-    sphere.CanCollide = false
-    sphere.Material = Enum.Material.ForceField
-    sphere.Shape = Enum.PartType.Ball
-    sphere.Color = Color3.fromRGB(0, 255, 255)
-    sphere.Transparency = 0.8
-    sphere.Parent = workspace
-    visualParts.sphere = sphere
-    
-    -- Create edge lines for better visibility
-    for i = 1, 24 do
-        local edge = Instance.new("Part")
-        edge.Name = "ReachEdge" .. i
-        edge.Anchored = true
-        edge.CanCollide = false
-        edge.Material = Enum.Material.Neon
-        edge.Color = Color3.fromRGB(255, 255, 255)
-        edge.Size = Vector3.new(0.1, 0.1, 1)
-        edge.Transparency = 0.5
-        edge.Parent = workspace
-        visualParts["edge" .. i] = edge
-    end
-end
-
--- Predict ball movement
-local function predictBallPosition(ball, deltaTime)
-    if not reachSystem.prediction then return ball.Position end
-    
-    local velocity = ball.AssemblyLinearVelocity or Vector3.new(0, 0, 0)
-    local predictedPos = ball.Position + (velocity * deltaTime)
-    
-    -- Store ball history for better prediction
-    table.insert(reachSystem.ballHistory, {pos = ball.Position, time = tick()})
-    if #reachSystem.ballHistory > 10 then
-        table.remove(reachSystem.ballHistory, 1)
-    end
-    
-    return predictedPos
-end
-
--- ENHANCED: Advanced touch system with multiple methods
-local function advancedFireTouch(ball, character)
-    local methods = {
-        -- Method 1: Standard firetouchinterest
-        function()
-            for _, limb in pairs(character:GetDescendants()) do
-                if limb:IsA("BasePart") and limb.Name ~= "HumanoidRootPart" then
-                    firetouchinterest(ball, limb, 0)
-                    task.wait(0.001)
-                    firetouchinterest(ball, limb, 1)
-                end
-            end
-        end,
-        
-        -- Method 2: Direct position manipulation
-        function()
-            local root = character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local originalPos = root.CFrame
-                root.CFrame = CFrame.new(ball.Position + Vector3.new(0, 2, 0))
-                task.wait(0.01)
-                root.CFrame = originalPos
-            end
-        end,
-        
-        -- Method 3: Velocity-based approach
-        function()
-            if ball.AssemblyLinearVelocity then
-                local originalVel = ball.AssemblyLinearVelocity
-                ball.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                task.wait(0.005)
-                ball.AssemblyLinearVelocity = originalVel
-            end
-        end,
-        
-        -- Method 4: Direct touch event firing
-        function()
-            for _, limb in pairs(character:GetDescendants()) do
-                if limb:IsA("BasePart") and limb.Name ~= "HumanoidRootPart" then
-                    local touchEvent = ball:FindFirstChildOfClass("TouchTransmitter")
-                    if touchEvent then
-                        for _, connection in pairs(getconnections(touchEvent.Touched)) do
-                            if connection.Function then
-                                connection:Fire(limb)
-                            end
-                        end
-                    end
-                end
-            end
-        end,
-        
-        -- Method 5: Network event manipulation
-        function()
-            for _, remote in pairs(ReplicatedStorage:GetDescendants()) do
-                if remote:IsA("RemoteEvent") and (remote.Name:lower():find("ball") or remote.Name:lower():find("touch") or remote.Name:lower():find("kick")) then
-                    remote:FireServer("touch", ball)
-                end
-            end
-        end
-    }
-    
-    -- Execute based on bypass level
-    local methodsToUse = math.min(reachSystem.bypassLevel, #methods)
-    for i = 1, methodsToUse do
-        task.spawn(methods[i])
-    end
-end
-
--- Smart delay system
-local function getSmartDelay()
-    if not reachSystem.smartDelay then return 0.05 end
-    
-    local baseDelay = 0.02
-    local distanceMultiplier = reachSystem.distance / 20
-    local modeMultiplier = ({
-        Smart = 1,
-        Aggressive = 0.5,
-        Stealth = 2,
-        Prediction = 1.2,
-        Hybrid = 0.8
-    })[reachSystem.mode] or 1
-    
-    return baseDelay * distanceMultiplier * modeMultiplier
-end
-
--- ENHANCED: Main reach function with better ball detection
-local function processReach()
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local currentTime = tick()
-    local smartDelay = getSmartDelay()
-    
-    if currentTime - reachSystem.lastTouch < smartDelay then return end
-    
-    -- ENHANCED: Better ball detection
-    local balls = {}
-    
-    -- Method 1: Standard ball detection
-    for _, ball in pairs(workspace:GetDescendants()) do
-        if ball:IsA("Part") and ball:FindFirstChild("network") then
-            table.insert(balls, ball)
-        end
-    end
-    
-    -- Method 2: Alternative ball detection
-    if #balls == 0 then
-        for _, ball in pairs(workspace:GetDescendants()) do
-            if ball:IsA("Part") and (ball.Name:lower():find("ball") or ball.Name:lower():find("football")) then
-                table.insert(balls, ball)
-            end
-        end
-    end
-    
-    -- Method 3: Visual ball detection
-    if #balls == 0 then
-        for _, ball in pairs(workspace:GetDescendants()) do
-            if ball:IsA("Part") and ball.Material == Enum.Material.Plastic and ball.Size == Vector3.new(2, 2, 2) then
-                table.insert(balls, ball)
-            end
-        end
-    end
-    
-    -- Process each ball
-    for _, ball in pairs(balls) do
-        local ballPos = predictBallPosition(ball, 0.1)
-        local distance = (ballPos - root.Position).Magnitude
-        
-        if distance <= reachSystem.distance then
-            -- Mode-specific behavior
-            local shouldTouch = false
-            
-            if reachSystem.mode == "Smart" then
-                shouldTouch = distance <= reachSystem.distance * 0.8
-            elseif reachSystem.mode == "Aggressive" then
-                shouldTouch = true
-            elseif reachSystem.mode == "Stealth" then
-                shouldTouch = distance <= reachSystem.distance * 0.6 and math.random() > 0.3
-            elseif reachSystem.mode == "Prediction" then
-                shouldTouch = distance <= reachSystem.distance * 0.9
-            elseif reachSystem.mode == "Hybrid" then
-                shouldTouch = distance <= reachSystem.distance * (0.6 + math.random() * 0.3)
-            end
-            
-            if shouldTouch then
-                advancedFireTouch(ball, char)
-                reachSystem.lastTouch = currentTime
-                reachSystem.touchCount = reachSystem.touchCount + 1
-                
-                if not reachSystem.multiTouch then
-                    break
-                end
-            end
-        end
-    end
-end
-
--- Update visualizer
-local function updateVisualizer()
-    if not reachSystem.visualizer then
-        for _, part in pairs(visualParts) do
-            if part and part.Parent then
-                part.Transparency = 1
-            end
-        end
-        return
-    end
-    
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local pulse = math.sin(tick() * 3) * 0.1 + 0.8
-    
-    -- Update sphere
-    if visualParts.sphere then
-        visualParts.sphere.Size = Vector3.new(reachSystem.distance * 2, reachSystem.distance * 2, reachSystem.distance * 2)
-        visualParts.sphere.CFrame = root.CFrame
-        visualParts.sphere.Transparency = pulse
-        
-        -- Color based on mode
-        local colors = {
-            Smart = Color3.fromRGB(0, 255, 255),
-            Aggressive = Color3.fromRGB(255, 0, 0),
-            Stealth = Color3.fromRGB(128, 0, 128),
-            Prediction = Color3.fromRGB(0, 255, 0),
-            Hybrid = Color3.fromRGB(255, 255, 0)
-        }
-        visualParts.sphere.Color = colors[reachSystem.mode] or Color3.fromRGB(255, 255, 255)
-    end
-    
-    -- Update edges
-    for i = 1, 24 do
-        local edge = visualParts["edge" .. i]
-        if edge then
-            local angle = (i / 24) * math.pi * 2
-            local radius = reachSystem.distance
-            local height = math.sin(angle * 3) * 2
-            
-            local pos = root.Position + Vector3.new(
-                math.cos(angle) * radius,
-                height,
-                math.sin(angle) * radius
-            )
-            
-            edge.CFrame = CFrame.new(pos, root.Position)
-            edge.Size = Vector3.new(0.1, 0.1, (pos - root.Position).Magnitude)
-            edge.Transparency = pulse * 0.7
-        end
-    end
-end
-
--- Start advanced reach system
-function startAdvancedReach()
-    createAdvancedVisualizer()
-    
-    reachConnections.main = RunService.Heartbeat:Connect(processReach)
-    reachConnections.visual = RunService.RenderStepped:Connect(updateVisualizer)
-    
-    Rayfield:Notify({
-        Title = "Advanced Reach",
-        Content = "Advanced reach system activated with " .. reachSystem.mode .. " mode"
-    })
-end
-
--- Stop advanced reach system
-function stopAdvancedReach()
-    for name, connection in pairs(reachConnections) do
-        if connection then
-            connection:Disconnect()
-        end
-    end
-    reachConnections = {}
-    
-    for _, part in pairs(visualParts) do
-        if part and part.Parent then
-            part:Destroy()
-        end
-    end
-    visualParts = {}
-end
-
 -- BALL CONTROLS TAB
 local ballSystem = {
     autoGoal = false,
@@ -691,12 +266,12 @@ local ballSystem = {
 }
 
 tabBall:CreateToggle({
-    Name = "Auto Goal (Advanced)",
+    Name = "Auto Goal",
     CurrentValue = false,
-    Flag = "AutoGoalAdvanced",
+    Flag = "AutoGoal",
     Callback = function(v)
         ballSystem.autoGoal = v
-        Rayfield:Notify({Title = "Ball Control", Content = v and "Advanced auto goal enabled" or "Advanced auto goal disabled"})
+        Rayfield:Notify({Title = "Ball Control", Content = v and "Auto goal enabled" or "Auto goal disabled"})
     end
 })
 
@@ -705,7 +280,7 @@ tabBall:CreateSlider({
     Range = {50, 500},
     Increment = 10,
     CurrentValue = 150,
-    Flag = "GoalPowerAdvanced",
+    Flag = "GoalPower",
     Callback = function(val)
         ballSystem.goalPower = val
     end
@@ -716,7 +291,7 @@ tabBall:CreateSlider({
     Range = {100, 800},
     Increment = 20,
     CurrentValue = 200,
-    Flag = "AirPowerAdvanced",
+    Flag = "AirPower",
     Callback = function(val)
         ballSystem.airPower = val
     end
@@ -753,7 +328,7 @@ tabBall:CreateToggle({
     end
 })
 
--- NEW: Shield Ball feature
+-- FIXED: Shield Ball feature
 tabBall:CreateToggle({
     Name = "Shield Ball (Exclusive Touch)",
     CurrentValue = false,
@@ -787,7 +362,7 @@ tabBall:CreateButton({
     end
 })
 
--- NEW: Shield Ball System
+-- FIXED: Shield Ball System
 function startShieldBall()
     -- Clear any existing connections
     stopShieldBall()
@@ -800,178 +375,74 @@ function startShieldBall()
         end
     end
     
-    -- Alternative ball detection if none found
-    if #balls == 0 then
-        for _, ball in pairs(workspace:GetDescendants()) do
-            if ball:IsA("Part") and (ball.Name:lower():find("ball") or ball.Name:lower():find("football")) then
-                table.insert(balls, ball)
-            end
-        end
-    end
-    
-    -- Set up shield for each ball
-    for _, ball in pairs(balls) do
-        -- Method 1: Hook TouchTransmitter
-        local touchTransmitter = ball:FindFirstChildOfClass("TouchTransmitter")
-        if touchTransmitter then
-            local connections = getconnections(touchTransmitter.Touched)
-            for _, connection in pairs(connections) do
-                if connection.Function then
-                    local originalFunc = connection.Function
-                    connection:Disconnect()
-                    
-                    local newConnection = touchTransmitter.Touched:Connect(function(hit)
-                        -- Check if the hit part belongs to the local player
-                        local hitPlayer = Players:GetPlayerFromCharacter(hit.Parent)
-                        if hitPlayer == LocalPlayer then
-                            -- Allow the touch
-                            originalFunc(hit)
-                        end
-                    end)
-                    
-                    table.insert(ballSystem.shieldConnections, newConnection)
+    -- Hook the overlapCheck and gkCheck functions to only allow the local player
+    for _, v in ipairs(getgc(true)) do
+        if type(v) == "table" and rawget(v, "overlapCheck") and rawget(v, "gkCheck") then
+            local originalOverlapCheck = v.overlapCheck
+            local originalGkCheck = v.gkCheck
+            
+            v.overlapCheck = function(...)
+                local args = {...}
+                -- Check if the first argument is the local player
+                if #args > 0 and args[1] == LocalPlayer then
+                    return true
                 end
+                return false
             end
-        end
-        
-        -- Method 2: Hook network events
-        local network = ball:FindFirstChild("network")
-        if network then
-            for _, child in pairs(network:GetDescendants()) do
-                if child:IsA("RemoteEvent") or child:IsA("RemoteFunction") then
-                    local oldFireServer = child.FireServer
-                    child.FireServer = function(self, ...)
-                        local args = {...}
-                        
-                        -- Check if the event is being fired by the local player
-                        local caller = getfenv(2).script
-                        if caller and caller.Parent and caller.Parent:IsDescendantOf(LocalPlayer.Character) then
-                            return oldFireServer(self, unpack(args))
-                        end
-                        
-                        -- Block the event for other players
-                        return nil
-                    end
-                    
-                    table.insert(ballSystem.shieldConnections, {
-                        object = child,
-                        method = "FireServer",
-                        original = oldFireServer
-                    })
+            
+            v.gkCheck = function(...)
+                local args = {...}
+                -- Check if the first argument is the local player
+                if #args > 0 and args[1] == LocalPlayer then
+                    return true
                 end
+                return false
             end
-        end
-        
-        -- Method 3: Hook Touched event directly
-        local touchedConnection = ball.Touched:Connect(function(hit)
-            -- Check if the hit part belongs to the local player
-            local hitPlayer = Players:GetPlayerFromCharacter(hit.Parent)
-            if hitPlayer ~= LocalPlayer then
-                -- Create a barrier effect
-                local barrier = Instance.new("Part")
-                barrier.Anchored = true
-                barrier.CanCollide = false
-                barrier.Size = Vector3.new(0.1, 0.1, 0.1)
-                barrier.Position = hit.Position
-                barrier.Material = Enum.Material.ForceField
-                barrier.Color = Color3.fromRGB(255, 0, 0)
-                barrier.Transparency = 0.5
-                barrier.Parent = workspace
-                
-                -- Animate and remove the barrier
-                local tween = TweenService:Create(
-                    barrier,
-                    TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    {Size = Vector3.new(5, 5, 5), Transparency = 1}
-                )
-                tween:Play()
-                tween.Completed:Connect(function()
-                    barrier:Destroy()
-                end)
-                
-                -- Push the player back slightly
-                local character = hit.Parent
-                if character and character:FindFirstChild("HumanoidRootPart") then
-                    local root = character.HumanoidRootPart
-                    local direction = (root.Position - ball.Position).Unit
-                    root.AssemblyLinearVelocity = direction * 10
-                end
-            end
-        end)
-        
-        table.insert(ballSystem.shieldConnections, touchedConnection)
-        
-        -- Method 4: Hook getgc functions related to ball touching
-        for _, v in ipairs(getgc(true)) do
-            if type(v) == "function" then
-                local info = debug.getinfo(v)
-                if info and info.source and (
-                    info.source:find("ball") or 
-                    info.source:find("touch") or
-                    info.source:find("kick")
-                ) then
-                    local originalFunc = v
-                    local hookedFunc = function(...)
-                        local args = {...}
-                        
-                        -- Check if the first argument is a part belonging to the local player
-                        if #args > 0 and args[1].IsA and args[1]:IsA("BasePart") then
-                            local hitPlayer = Players:GetPlayerFromCharacter(args[1].Parent)
-                            if hitPlayer == LocalPlayer then
-                                return originalFunc(...)
-                            end
-                        end
-                        
-                        -- Block the function for other players
-                        return nil
-                    end
-                    
-                    hookfunction(v, hookedFunc)
-                    
-                    table.insert(ballSystem.shieldConnections, {
-                        object = v,
-                        method = "hookfunction",
-                        original = originalFunc
-                    })
-                end
-            end
+            
+            table.insert(ballSystem.shieldConnections, {
+                object = v,
+                overlapCheck = originalOverlapCheck,
+                gkCheck = originalGkCheck
+            })
         end
     end
     
     -- Create visual shield effect
-    local shieldVisual = Instance.new("Part")
-    shieldVisual.Name = "BallShieldVisual"
-    shieldVisual.Anchored = true
-    shieldVisual.CanCollide = false
-    shieldVisual.Material = Enum.Material.ForceField
-    shieldVisual.Shape = Enum.PartType.Ball
-    shieldVisual.Color = Color3.fromRGB(255, 215, 0)
-    shieldVisual.Transparency = 0.7
-    shieldVisual.Parent = workspace
-    
-    local updateShieldVisual = RunService.Heartbeat:Connect(function()
-        for _, ball in pairs(balls) do
+    for _, ball in pairs(balls) do
+        local shieldVisual = Instance.new("Part")
+        shieldVisual.Name = "BallShieldVisual"
+        shieldVisual.Anchored = true
+        shieldVisual.CanCollide = false
+        shieldVisual.Material = Enum.Material.ForceField
+        shieldVisual.Shape = Enum.PartType.Ball
+        shieldVisual.Color = Color3.fromRGB(255, 215, 0)
+        shieldVisual.Transparency = 0.7
+        shieldVisual.Parent = workspace
+        
+        local updateShieldVisual = RunService.Heartbeat:Connect(function()
             if ball and ball.Parent then
                 shieldVisual.Size = Vector3.new(ball.Size.X + 2, ball.Size.Y + 2, ball.Size.Z + 2)
                 shieldVisual.CFrame = ball.CFrame
                 shieldVisual.Transparency = 0.7 + math.sin(tick() * 2) * 0.2
-                break
+            else
+                shieldVisual:Destroy()
             end
-        end
-    end)
-    
-    table.insert(ballSystem.shieldConnections, updateShieldVisual)
-    table.insert(ballSystem.shieldConnections, shieldVisual)
+        end)
+        
+        table.insert(ballSystem.shieldConnections, updateShieldVisual)
+        table.insert(ballSystem.shieldConnections, shieldVisual)
+    end
 end
 
 function stopShieldBall()
-    -- Disconnect all connections
+    -- Restore original functions
     for _, connection in pairs(ballSystem.shieldConnections) do
-        if type(connection) == "table" then
-            if connection.method == "FireServer" and connection.object and connection.original then
-                connection.object.FireServer = connection.original
-            elseif connection.method == "hookfunction" and connection.object and connection.original then
-                hookfunction(connection.object, connection.original)
+        if type(connection) == "table" and connection.object then
+            if connection.overlapCheck then
+                connection.object.overlapCheck = connection.overlapCheck
+            end
+            if connection.gkCheck then
+                connection.object.gkCheck = connection.gkCheck
             end
         elseif connection.Disconnect then
             connection:Disconnect()
@@ -981,56 +452,6 @@ function stopShieldBall()
     end
     
     ballSystem.shieldConnections = {}
-end
-
--- Advanced shooting function
-local function advancedShootBall(ball, targetPos, power, curve)
-    if ballSystem.shootCooldown or tick() - ballSystem.lastShot < 0.3 then return end
-    ballSystem.shootCooldown = true
-    ballSystem.lastShot = tick()
-    
-    task.spawn(function()
-        pcall(function()
-            local direction = (targetPos - ball.Position).Unit
-            local distance = (targetPos - ball.Position).Magnitude
-            
-            -- Add curve for more realistic shots
-            if curve then
-                local rightVector = direction:Cross(Vector3.new(0, 1, 0))
-                direction = direction + rightVector * (math.random(-0.2, 0.2))
-            end
-            
-            -- Multiple velocity application methods
-            local methods = {
-                function()
-                    ball.AssemblyLinearVelocity = direction * power
-                end,
-                function()
-                    local bv = Instance.new("BodyVelocity")
-                    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                    bv.Velocity = direction * power
-                    bv.Parent = ball
-                    Debris:AddItem(bv, 0.15)
-                end,
-                function()
-                    local bp = Instance.new("BodyPosition")
-                    bp.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-                    bp.Position = targetPos
-                    bp.Parent = ball
-                    Debris:AddItem(bp, 0.1)
-                end
-            }
-            
-            -- Execute multiple methods for better success rate
-            for i = 1, math.min(reachSystem.bypassLevel, #methods) do
-                methods[i]()
-                task.wait(0.01)
-            end
-        end)
-        
-        task.wait(0.5)
-        ballSystem.shootCooldown = false
-    end)
 end
 
 -- Ball system handler
@@ -1056,16 +477,17 @@ local ballConnection = RunService.Heartbeat:Connect(function()
             end
             
             -- Auto goal
-            if ballSystem.autoGoal and distance <= reachSystem.distance then
+            if ballSystem.autoGoal and distance <= reachDist then
                 for _, goal in pairs(workspace:GetDescendants()) do
                     if goal:IsA("Model") and (goal.Name:lower():find("goal") or goal.Name:lower():find("net")) then
                         local goalPart = goal:FindFirstChildWhichIsA("BasePart")
                         if goalPart then
                             local isAirBall = ball.Position.Y > 8
                             local power = isAirBall and ballSystem.airPower or ballSystem.goalPower
-                            local shouldCurve = math.random() > 0.7 -- 30% chance for curve
                             
-                            advancedShootBall(ball, goalPart.Position, power, shouldCurve)
+                            -- Shoot the ball
+                            local direction = (goalPart.Position - ball.Position).Unit
+                            ball.AssemblyLinearVelocity = direction * power
                             break
                         end
                     end
@@ -1308,7 +730,11 @@ local gkConnection = RunService.Heartbeat:Connect(function()
                 
                 -- Touch the ball
                 task.spawn(function()
-                    advancedFireTouch(ball, char)
+                    for _, limb in pairs(char:GetDescendants()) do
+                        if limb:IsA("BasePart") then
+                            fireTouch(ball, limb)
+                        end
+                    end
                 end)
             end
         end
@@ -1320,11 +746,11 @@ tabSettings:CreateButton({
     Name = "Performance Stats",
     Callback = function()
         local stats = {
-            "Reach Touches: " .. reachSystem.touchCount,
-            "Current Mode: " .. reachSystem.mode,
-            "Reach Distance: " .. reachSystem.distance,
-            "Bypass Level: " .. reachSystem.bypassLevel,
-            "Last Touch: " .. math.floor((tick() - reachSystem.lastTouch) * 100) / 100 .. "s ago"
+            "Reach Status: " .. (reachOn and "Enabled" or "Disabled"),
+            "Reach Distance: " .. reachDist,
+            "Shield Ball: " .. (ballSystem.shieldBall and "Enabled" or "Disabled"),
+            "Auto Goal: " .. (ballSystem.autoGoal and "Enabled" or "Disabled"),
+            "Ball Magnet: " .. (ballSystem.ballMagnet and "Enabled" or "Disabled")
         }
         
         local message = table.concat(stats, "\n")
@@ -1335,9 +761,7 @@ tabSettings:CreateButton({
 tabSettings:CreateButton({
     Name = "Reset All Settings",
     Callback = function()
-        reachSystem.distance = 8
-        reachSystem.mode = "Smart"
-        reachSystem.bypassLevel = 3
+        reachDist = 5
         playerSystem.speedMult = 2
         ballSystem.goalPower = 150
         
@@ -1350,7 +774,7 @@ tabSettings:CreateButton({
     Callback = function()
         local cleaned = 0
         for _, obj in pairs(workspace:GetDescendants()) do
-            if obj:IsA("Part") and obj.Name:find("Reach") then
+            if obj:IsA("Part") and obj.Name:find("BallShieldVisual") then
                 obj:Destroy()
                 cleaned = cleaned + 1
             end
@@ -1362,8 +786,8 @@ tabSettings:CreateButton({
 tabSettings:CreateButton({
     Name = "Emergency Stop",
     Callback = function()
-        reachSystem.enabled = false
-        stopAdvancedReach()
+        reachOn = false
+        stopReach()
         
         playerSystem.speed = false
         playerSystem.noclip = false
@@ -1384,16 +808,10 @@ tabSettings:CreateButton({
         if playerConnection then playerConnection:Disconnect() end
         if ballConnection then ballConnection:Disconnect() end
         if gkConnection then gkConnection:Disconnect() end
+        if reachConnection then reachConnection:Disconnect() end
         
-        stopAdvancedReach()
+        stopReach()
         stopShieldBall()
-        
-        -- Clean up visual parts
-        for _, part in pairs(visualParts) do
-            if part and part.Parent then
-                part:Destroy()
-            end
-        end
         
         Rayfield:Notify({Title = "System", Content = "Astatine Premium V2.0 unloaded successfully!"})
         task.wait(2)
@@ -1404,6 +822,6 @@ tabSettings:CreateButton({
 -- Initialize notification
 Rayfield:Notify({
     Title = "Astatine Premium V2.0",
-    Content = "Advanced systems loaded successfully!\nAdvanced reach with 5 modes\nMulti-layer bypasser\nOverpowered features ready!",
+    Content = "Advanced systems loaded successfully!\nSimple and effective reach system\nBall shield feature ready!",
     Duration = 5
 })
