@@ -29,7 +29,6 @@ local tabSettings = Window:CreateTab("Settings")
 local reachOn = false
 local reachDist = 5
 local maxReach = 8
-local reachConnection = nil
 
 -- Bypass Reach (overlapCheck + gkCheck hook)
 local function bypassReach()
@@ -44,46 +43,33 @@ end
 -- Initialize bypass
 bypassReach()
 
--- Reach mechanics
+-- Reach mechanics (simpler version)
 local function fireTouch(ball, limb)
     firetouchinterest(ball, limb, 0)
     task.wait(0.03)
     firetouchinterest(ball, limb, 1)
 end
 
-local function startReach()
-    if reachConnection then
-        reachConnection:Disconnect()
-        reachConnection = nil
-    end
-    
-    reachConnection = RunService.Heartbeat:Connect(function()
-        if reachOn then
-            local char = LocalPlayer.Character
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-            if root then
-                for _, ball in ipairs(workspace:GetDescendants()) do
-                    if ball:IsA("Part") and ball:FindFirstChild("network") then
-                        if (ball.Position - root.Position).Magnitude <= reachDist then
-                            for _, limb in pairs(char:GetDescendants()) do
-                                if limb:IsA("BasePart") then
-                                    task.spawn(fireTouch, ball, limb)
-                                end
+-- Create heartbeat connection for reach
+local reachConnection = RunService.Heartbeat:Connect(function()
+    if reachOn then
+        local char = LocalPlayer.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if root then
+            for _, ball in ipairs(workspace:GetDescendants()) do
+                if ball:IsA("Part") and ball:FindFirstChild("network") then
+                    if (ball.Position - root.Position).Magnitude <= reachDist then
+                        for _, limb in pairs(char:GetDescendants()) do
+                            if limb:IsA("BasePart") then
+                                task.spawn(fireTouch, ball, limb)
                             end
                         end
                     end
                 end
             end
         end
-    end)
-end
-
-local function stopReach()
-    if reachConnection then
-        reachConnection:Disconnect()
-        reachConnection = nil
     end
-end
+end)
 
 -- ADVANCED REACH TAB
 tabReach:CreateToggle({
@@ -92,13 +78,7 @@ tabReach:CreateToggle({
     Flag = "ReachEnabled",
     Callback = function(v)
         reachOn = v
-        if v then
-            startReach()
-            Rayfield:Notify({Title = "Reach System", Content = "Reach enabled"})
-        else
-            stopReach()
-            Rayfield:Notify({Title = "Reach System", Content = "Reach disabled"})
-        end
+        Rayfield:Notify({Title = "Reach System", Content = v and "Reach enabled" or "Reach disabled"})
     end
 })
 
@@ -328,7 +308,7 @@ tabBall:CreateToggle({
     end
 })
 
--- FIXED: Shield Ball feature
+-- FIXED: Shield Ball feature - Only local player can touch
 tabBall:CreateToggle({
     Name = "Shield Ball (Exclusive Touch)",
     CurrentValue = false,
@@ -362,7 +342,7 @@ tabBall:CreateButton({
     end
 })
 
--- FIXED: Shield Ball System
+-- FIXED: Shield Ball System - Only local player can touch
 function startShieldBall()
     -- Clear any existing connections
     stopShieldBall()
@@ -381,6 +361,14 @@ function startShieldBall()
             local originalOverlapCheck = v.overlapCheck
             local originalGkCheck = v.gkCheck
             
+            -- Store original functions for restoration
+            table.insert(ballSystem.shieldConnections, {
+                object = v,
+                overlapCheck = originalOverlapCheck,
+                gkCheck = originalGkCheck
+            })
+            
+            -- Override functions to only allow local player
             v.overlapCheck = function(...)
                 local args = {...}
                 -- Check if the first argument is the local player
@@ -398,12 +386,6 @@ function startShieldBall()
                 end
                 return false
             end
-            
-            table.insert(ballSystem.shieldConnections, {
-                object = v,
-                overlapCheck = originalOverlapCheck,
-                gkCheck = originalGkCheck
-            })
         end
     end
     
@@ -787,7 +769,6 @@ tabSettings:CreateButton({
     Name = "Emergency Stop",
     Callback = function()
         reachOn = false
-        stopReach()
         
         playerSystem.speed = false
         playerSystem.noclip = false
@@ -810,7 +791,6 @@ tabSettings:CreateButton({
         if gkConnection then gkConnection:Disconnect() end
         if reachConnection then reachConnection:Disconnect() end
         
-        stopReach()
         stopShieldBall()
         
         Rayfield:Notify({Title = "System", Content = "Astatine Premium V2.0 unloaded successfully!"})
